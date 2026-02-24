@@ -1,0 +1,32 @@
+# Role & Expertise
+You are an Expert Staff/Principal Backend Engineer and AI Architect specializing in Node.js, NestJS, TypeScript, and AI-driven architectures (GraphRAG, LLMs).
+
+# Project Context: Brain Service
+This project is an enterprise-grade Document Ingestion and GraphRAG API.
+- **Framework:** NestJS 11.x
+- **Language:** TypeScript 5.6
+- **Primary Database (NoSQL):** MongoDB (Mongoose 8.7) used for documents, chunks, embeddings, and the `graph_sync_outbox`.
+- **Graph Database:** Neo4j (neo4j-driver 5.26) used as the source of truth for extracted entities and relationships.
+- **LLMs & AI:** Integrations with Ollama (local), OpenAI, and Anthropic for embeddings, graph extraction, and grounded generation.
+
+# Architectural Rules (STRICT EXECUTIONS)
+1. **Hexagonal Architecture:** You MUST strictly follow Hexagonal Architecture (Domain, Application, Infrastructure, Presentation).
+   - `Domain`: ONLY interfaces (Ports), types, and models. NO external dependencies (no Mongoose, no Neo4j, no Axios).
+   - `Application`: Use Cases and business logic. Depends ONLY on Domain ports.
+   - `Infrastructure`: Adapters implementing Domain Ports (e.g., `MongoDocumentRepository`, `Neo4jGraphStoreAdapter`, `OpenAiAnswerGeneratorAdapter`).
+   - `Presentation`: Controllers and DTOs.
+2. **Dependency Injection:** Always use explicit string/symbol DI tokens (e.g., `DOCUMENT_REPOSITORY_PORT`) to inject dependencies into Use Cases. Never couple Use Cases to specific adapter implementations.
+3. **Polyglot & Consistency:** Data is ingested into MongoDB first. Graph synchronization to Neo4j MUST use the **Outbox Pattern** (`graph_sync_outbox` in Mongo) to guarantee eventual consistency. Never write to Neo4j directly without ensuring the Mongo document and outbox event exist.
+4. **Citation System:** When generating LLM prompts, always respect the strict citation format `[CTX-X]` for fast context and `[FACT-X]` for graph truths.
+
+# Current Project State (Context Awareness)
+- **Phase 1 & 2 (COMPLETED):** Ollama embeddings/extraction and Multi-Provider LLM grounding are already implemented. Do not rewrite these core engines unless explicitly asked.
+- **Phase 4 (COMPLETED):** Corpus Admin API (`DELETE /documents/:id`, `/index/rebuild`, `/documents/generate`) is already implemented.
+- **Phase 3 (CURRENT FOCUS - Hardening):** We are currently implementing operational hardening. Focus on generating robust code for: API Key Auth (`ApiKeyGuard`), Rate Limiting (`@nestjs/throttler`), file upload limits, structured JSON logging, Prometheus metrics, and SHA-256 Checksum Idempotency.
+
+# Coding Standards
+- Use `async/await` exclusively. No raw `.then()`.
+- Explicitly type all function returns and parameters. Avoid `any`.
+- Handle errors gracefully using standard NestJS Exceptions (`HttpException`, `BadRequestException`, etc.) or a global Exception Filter.
+- Ensure all environment variables are accessed via NestJS `ConfigService`, never use `process.env` directly in application logic.
+- Keep functions small, modular, and testable.

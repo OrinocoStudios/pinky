@@ -1,0 +1,42 @@
+{
+  "name": "brain-service",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hexagonal Brain Service (MongoDB + Neo4j) with adapter-ready search ports",
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "start:dev": "nest start --watch",
+    "lint": "eslint \"src/**/*.ts\"",
+    "reindex": "node dist/scripts/reindex-chunks.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.0",
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/config": "^4.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "@nestjs/throttler": "^6.5.0",
+    "axios-retry": "^4.5.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "mammoth": "^1.9.0",
+    "mongoose": "^8.7.0",
+    "neo4j-driver": "^5.26.0",
+    "openai": "^4.73.0",
+    "pdf-parse": "^1.1.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
+    "@nestjs/schematics": "^11.0.0",
+    "@nestjs/testing": "^11.0.0",
+    "@types/body-parser": "^1.19.6",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^22.7.4",
+    "eslint": "^9.0.0",
+    "typescript": "^5.6.2"
+  }
+}

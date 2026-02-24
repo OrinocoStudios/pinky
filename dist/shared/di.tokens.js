@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DOCUMENT_GENERATOR_PORT = exports.GRAPH_EXTRACTOR_PORT = exports.EMBEDDING_PORT = exports.ANSWER_GENERATOR_PORT = exports.FILE_TEXT_EXTRACTOR_PORT = exports.GRAPH_STORE_PORT = exports.CHUNK_SEARCH_PORT = exports.DOCUMENT_REPOSITORY = void 0;
+exports.DOCUMENT_REPOSITORY = Symbol('DOCUMENT_REPOSITORY');
+exports.CHUNK_SEARCH_PORT = Symbol('CHUNK_SEARCH_PORT');
+exports.GRAPH_STORE_PORT = Symbol('GRAPH_STORE_PORT');
+exports.FILE_TEXT_EXTRACTOR_PORT = Symbol('FILE_TEXT_EXTRACTOR_PORT');
+exports.ANSWER_GENERATOR_PORT = Symbol('ANSWER_GENERATOR_PORT');
+exports.EMBEDDING_PORT = Symbol('EMBEDDING_PORT');
+exports.GRAPH_EXTRACTOR_PORT = Symbol('GRAPH_EXTRACTOR_PORT');
+exports.DOCUMENT_GENERATOR_PORT = Symbol('DOCUMENT_GENERATOR_PORT');
+//# sourceMappingURL=di.tokens.js.map

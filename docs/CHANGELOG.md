@@ -1,0 +1,211 @@
+# Changelog - Brain Service
+
+Este registro resume cambios de implementación para mantener contexto operativo y técnico.
+
+---
+
+## 2026-02-24 (Fase 4 - Administración de corpus e índice)
+
+### Added
+
+- `DELETE /documents/:id`: elimina documento, chunks y outbox en Mongo; nodo Document, entidades y relaciones asociadas en Neo4j.
+- `POST /documents/generate`: genera e ingesta documentos por caso de uso (`useCaseId`, `title`, `params`).
+- `POST /index/rebuild`: reindexa embeddings de todos los chunks (o hasta `limit`).
+- `POST /index/incremental`: reindexa solo chunks sin `embeddingModel` o con modelo distinto al actual.
+- Puerto `DocumentGeneratorPort` y adaptador `TemplateDocumentGeneratorAdapter` con templates por defecto.
+- `DeleteDocumentUseCase` y `GenerateDocumentUseCase`.
+- `GraphStorePort.deleteByDocumentId` y `DocumentRepositoryPort.deleteDocument`.
+- `DocumentRepositoryPort.listChunksNeedingReindex` para reindexación incremental.
+- `ReindexChunksUseCase` extendido con modo `rebuild` | `incremental`.
+- `IndexController` con rutas `/index/rebuild` y `/index/incremental`.
+- ADR-0006: Administración de corpus por API.
+
+### Changed
+
+- `DocumentsController` expone DELETE y POST generate.
+- `ReindexChunksUseCase` acepta `mode` en input.
+
+### Notes
+
+- Ingesta por URL (opcional) no implementada en esta fase.
+- `TemplateDocumentGeneratorAdapter` incluye templates básicos; puede extenderse con Ollama u otro LLM.
+
+---
+
+## 2026-02-24 (Fase 1 - Calidad de conocimiento)
+
+### Added
+
+- Puertos `EmbeddingPort` y `GraphExtractorPort` para desacoplar IA de proveedores concretos.
+- Adaptadores Ollama: `OllamaEmbeddingAdapter` (embeddings vía `/api/embed`) y `OllamaGraphExtractorAdapter` (extracción JSON vía `/api/generate`).
+- Configuración Ollama: `OLLAMA_BASE_URL`, `OLLAMA_EMBEDDING_MODEL`, `OLLAMA_EXTRACTION_MODEL`, `OLLAMA_TIMEOUT_MS`.
+- Versionado de modelos en metadata: `embedding_model`, `extraction_model` en documentos; `embeddingModel` en chunks.
+- Extracción de grafo por chunk con `sourceChunkId` real para trazabilidad.
+- Caso de uso `ReindexChunksUseCase` y script `npm run reindex` para reindexar embeddings de chunks existentes.
+- Métodos `listAllChunks` y `updateChunkEmbedding` en `DocumentRepositoryPort`.
+- ADR-0005: Ollama para embeddings y extracción estructurada.
+
+### Changed
+
+- `IngestDocumentUseCase` usa `EmbeddingPort` y `GraphExtractorPort` (Ollama) en lugar de servicios determinísticos/naive.
+- `MongoChunkSearchAdapter` usa `EmbeddingPort` para vector de consulta; fallback seguro para chunks sin embedding o dimensión inválida.
+- Eliminados `DeterministicEmbeddingService` y `NaiveGraphExtractorService` del módulo principal.
+- `GraphRagQueryUseCase` adaptado a contrato `AnswerGeneratorPort` (sources + GenerateAnswerOutput).
+
+### Notes
+
+- Requiere Ollama en ejecución para ingesta y query. Ejecutar `ollama pull nomic-embed-text` y `ollama pull llama3.2` antes de usar.
+- Tras migración, ejecutar `npm run build && npm run reindex` para actualizar chunks históricos.
+- Para `reindex`, usar `LLM_PROVIDER=local` si no se dispone de OpenAI/Anthropic (el script no usa el generador de respuestas).
+
+---
+
+## 2026-02-24 (inicial)
+
+### Added
+
+- Adopción oficial de `memory_architecture/brain_service/docs` como fuente de verdad del módulo.
+- Nuevo plan operativo consolidado: `memory_architecture/brain_service/docs/EXECUTION_PLAN.md`.
+- Scaffold inicial de `memory_architecture/brain_service` con NestJS y estructura hexagonal (`domain`, `application`, `infrastructure`, `presentation`).
+- Configuración base (`.env.example`, `docker-compose.yml`, `configuration.ts`, `nest-cli.json`).
+- Modelos de dominio para documento, chunk, entidades y relaciones.
+- Puertos de dominio:
+  - `DocumentRepositoryPort`
+  - `ChunkSearchPort`
+  - `GraphStorePort`
+  - `FileTextExtractorPort`
+  - `AnswerGeneratorPort`
+- Adaptadores iniciales:
+  - Mongo repository para documentos/chunks/outbox.
+  - Neo4j graph store con `MERGE` de nodos/relaciones.
+  - Búsqueda Mongo y placeholder Elasticsearch.
+  - Extractor de archivos (`txt/md/json/csv/pdf/docx`).
+  - Generador de respuesta local (placeholder).
+- Casos de uso:
+  - Ingesta documental (`IngestDocumentUseCase`).
+  - Consulta GraphRAG (`GraphRagQueryUseCase`).
+  - Retry de sincronización de grafo (`GraphSyncRetryService`).
+- Endpoints:
+  - `GET /health`
+  - `POST /documents/text`
+  - `POST /documents/upload`
+  - `GET /documents`
+  - `POST /outbox/retry`
+  - `POST /query`
+
+### Changed
+
+- `memory_architecture/brain_service/docs/README.md` ahora referencia explícitamente `EXECUTION_PLAN.md` como plan activo.
+- Pipeline de ingesta evolucionó de stub a persistencia real en Mongo.
+- Sincronización con Neo4j pasó a esquema con outbox + retry.
+- Endpoint `/query` ahora ensambla prompt grounded con contexto y hechos de grafo.
+
+### Notes
+
+- Embeddings y extractor de entidades actuales son temporales (determinísticos/naive) y deberán reemplazarse por adaptadores productivos.
+- La estrategia de búsqueda híbrida en Mongo está en modo inicial y debe migrar a índices vectoriales/híbridos gestionados en entorno final.
+
+---
+
+## 2026-02-24 - Fase 2 Completada
+
+### Added
+
+#### Proveedores LLM Reales
+- Integración con OpenAI (GPT-4o-mini por defecto)
+  - `OpenAiAnswerGeneratorAdapter` con SDK oficial de OpenAI
+  - Configuración de modelo, temperatura, max_tokens y timeout
+  - Manejo de errores específicos (401, 429, 404)
+  - Retry automático (3 intentos)
+- Integración con Anthropic (Claude-3.5-Sonnet)
+  - `AnthropicAnswerGeneratorAdapter` con SDK oficial de Anthropic
+  - Configuración similar a OpenAI
+  - Manejo de uso de tokens (input + output)
+- Provider Factory dinámico
+  - Selección de proveedor por variable `LLM_PROVIDER` (local/openai/anthropic)
+  - Inyección de dependencias con factory pattern en `app.module.ts`
+
+#### Sistema de Citación de Fuentes
+- `PromptTemplateService` para construcción de prompts estructurados
+  - IDs trazables para contextos ([CTX-1], [CTX-2]...)
+  - IDs trazables para hechos de grafo ([FACT-1], [FACT-2]...)
+  - Instrucciones explícitas anti-alucinación en prompts
+  - Formato de citación requerido
+- Extracción automática de fuentes citadas desde respuesta LLM
+- Respuesta con `sourcesUsed` (array de IDs citados)
+
+#### Metadata de Respuesta
+- `model`: Modelo LLM usado (ej: gpt-4o-mini, claude-3-5-sonnet)
+- `tokensUsed`: Total de tokens consumidos
+- `sourcesUsed`: Lista de IDs de fuentes citadas
+- Logs estructurados de latencia, tokens y fuentes
+
+### Changed
+
+#### Puerto y Contratos
+- `AnswerGeneratorPort` extendido con:
+  - `GenerateAnswerInput` (prompt + sources + maxTokens)
+  - `GenerateAnswerOutput` (answer + sourcesUsed + model + tokensUsed)
+  - `AnswerSource` (id + text + type: 'chunk' | 'graph_fact')
+- `QueryResponseDto` extendido con:
+  - `sourcesUsed: string[]`
+  - `fastContext: Array<{ id, text }>`
+  - `truthFacts: Array<{ id, from, relation, to }>`
+  - `model?: string`
+  - `tokensUsed?: number`
+
+#### GraphRagQueryUseCase
+- Integrado `PromptTemplateService` para construcción de prompts
+- Uso de nuevo puerto `AnswerGeneratorPort` con metadata
+- Fuentes con IDs trazables (chunkId, sourceChunkId)
+- Logging de latencia, modelo, tokens y citaciones
+- Manejo de errores con fallback informativo
+
+#### QueryController
+- Logging estructurado de queries y respuestas
+- Respuesta tipada con `QueryResponseDto`
+- Logs de modelo, tokens y fuentes citadas
+
+#### LocalAnswerGeneratorAdapter
+- Actualizado para cumplir nueva interfaz con metadata
+- Retorna todas las fuentes como "usadas" (modo determinístico)
+
+### Configuration
+
+#### Variables de Entorno Añadidas
+```env
+LLM_PROVIDER=local|openai|anthropic
+
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_TEMPERATURE=0.2
+OPENAI_MAX_TOKENS=1000
+OPENAI_TIMEOUT_MS=30000
+
+ANTHROPIC_API_KEY=
+ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
+ANTHROPIC_TEMPERATURE=0.2
+ANTHROPIC_MAX_TOKENS=1000
+ANTHROPIC_TIMEOUT_MS=30000
+```
+
+#### Dependencias Añadidas
+- `openai`: ^4.73.0
+- `@anthropic-ai/sdk`: ^0.32.0
+- `axios-retry`: ^4.5.0
+
+### Impact
+
+- ✅ POST /query ahora usa LLM real (según LLM_PROVIDER)
+- ✅ Respuestas con citación de fuentes trazables
+- ✅ Control de alucinaciones con prompts estructurados
+- ✅ Observabilidad de uso (modelo, tokens, latencia)
+- ✅ Soporte multi-proveedor (OpenAI, Anthropic, local)
+- ✅ Fallback a modo local si no hay API keys configuradas
+
+### Next Steps (Fase 3)
+
+- Hardening operacional (API key auth, rate limiting)
+- Observabilidad avanzada (métricas, logs estructurados)
+- Idempotencia en ingesta
+- Políticas de abuso y límites de carga
