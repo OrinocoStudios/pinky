@@ -1,6 +1,7 @@
 export type AppConfig = {
     env: string;
     port: number;
+    instanceId?: string;
     apiKey: string;
     enableApiKeyAuth: boolean;
     searchEngine: 'mongo' | 'elasticsearch';
@@ -15,6 +16,7 @@ export type AppConfig = {
     rateLimitIngest: number;
     maxFileSizeMB: number;
     allowedMimeTypes: string[];
+    enableChecksumValidation: boolean;
 };
 export type LlmConfig = {
     provider: 'local' | 'openai' | 'anthropic';

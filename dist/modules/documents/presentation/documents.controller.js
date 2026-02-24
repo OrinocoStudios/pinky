@@ -15,60 +15,27 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DocumentsController = void 0;
 const common_1 = require("@nestjs/common");
 const throttler_1 = require("@nestjs/throttler");
-const platform_express_1 = require("@nestjs/platform-express");
-const config_1 = require("@nestjs/config");
 const ingest_document_usecase_1 = require("../../ingestion/application/ingest-document.usecase");
 const delete_document_usecase_1 = require("../application/delete-document.usecase");
 const generate_document_usecase_1 = require("../application/generate-document.usecase");
 const di_tokens_1 = require("../../../shared/di.tokens");
 const documents_dto_1 = require("./documents.dto");
 const require_api_key_decorator_1 = require("../../../common/decorators/require-api-key.decorator");
+const file_upload_interceptor_1 = require("../../../common/interceptors/file-upload.interceptor");
 let DocumentsController = class DocumentsController {
     ingestDocumentUseCase;
     deleteDocumentUseCase;
     generateDocumentUseCase;
     documentRepository;
     fileTextExtractor;
-    configService;
-    maxFileSize = 10 * 1024 * 1024;
-    allowedMimeTypes = [
-        'text/plain',
-        'text/markdown',
-        'application/json',
-        'text/csv',
-        'application/pdf',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    ];
-    constructor(ingestDocumentUseCase, deleteDocumentUseCase, generateDocumentUseCase, documentRepository, fileTextExtractor, configService) {
+    constructor(ingestDocumentUseCase, deleteDocumentUseCase, generateDocumentUseCase, documentRepository, fileTextExtractor) {
         this.ingestDocumentUseCase = ingestDocumentUseCase;
         this.deleteDocumentUseCase = deleteDocumentUseCase;
         this.generateDocumentUseCase = generateDocumentUseCase;
         this.documentRepository = documentRepository;
         this.fileTextExtractor = fileTextExtractor;
-        this.configService = configService;
-        this.maxFileSize = 10 * 1024 * 1024;
-        this.allowedMimeTypes = [
-            'text/plain',
-            'text/markdown',
-            'application/json',
-            'text/csv',
-            'application/pdf',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        ];
-        const appConfig = this.configService.get('app', { infer: true });
-        if (appConfig) {
-            if (appConfig.maxFileSizeMB) {
-                this.maxFileSize = appConfig.maxFileSizeMB * 1024 * 1024;
-            }
-            if (appConfig.allowedMimeTypes && appConfig.allowedMimeTypes.length > 0) {
-                this.allowedMimeTypes = appConfig.allowedMimeTypes;
-            }
-        }
     }
     async ingestText(body) {
-        if (!body.rawText?.trim()) {
-            throw new common_1.BadRequestException('rawText is required');
-        }
         return this.ingestDocumentUseCase.execute({
             title: body.title,
             rawText: body.rawText,
@@ -95,12 +62,12 @@ let DocumentsController = class DocumentsController {
             throw new common_1.BadRequestException('Unable to extract text from uploaded file');
         }
         return this.ingestDocumentUseCase.execute({
-            title: body.title ?? file.originalname,
+            title: body.title ?? file.originalname ?? 'uploaded-file',
             rawText: extracted,
             source: {
                 kind: 'upload',
-                filename: file.originalname,
-                mimeType: file.mimetype,
+                filename: file.originalname ?? 'uploaded-file',
+                mimeType: file.mimetype ?? 'application/octet-stream',
             },
             metadata: {
                 ...(body.metadata ?? {}),
@@ -135,24 +102,9 @@ __decorate([
 ], DocumentsController.prototype, "generateDocument", null);
 __decorate([
     (0, common_1.Post)('upload'),
-    (0, throttler_1.Throttle)({ default: { ttl: 60000, limit: 3 } }),
+    (0, throttler_1.Throttle)({ upload: {} }),
     (0, require_api_key_decorator_1.RequireApiKey)(),
-    (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('file', {
-        limits: { fileSize: 10 * 1024 * 1024 },
-        fileFilter: (req, file, callback) => {
-            if (!file?.mimetype) {
-                callback(null, false);
-                return;
-            }
-            const allowed = this.allowedMimeTypes;
-            if (allowed.includes(file.mimetype)) {
-                callback(null, true);
-            }
-            else {
-                callback(new common_1.BadRequestException(`File type not allowed. Allowed types: ${allowed.join(', ') ?? 'none'}`), false);
-            }
-        },
-    })),
+    (0, common_1.UseInterceptors)(file_upload_interceptor_1.FileUploadInterceptor),
     __param(0, (0, common_1.UploadedFile)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -179,6 +131,6 @@ exports.DocumentsController = DocumentsController = __decorate([
     __param(4, (0, common_1.Inject)(di_tokens_1.FILE_TEXT_EXTRACTOR_PORT)),
     __metadata("design:paramtypes", [ingest_document_usecase_1.IngestDocumentUseCase,
         delete_document_usecase_1.DeleteDocumentUseCase,
-        generate_document_usecase_1.GenerateDocumentUseCase, Object, Object, config_1.ConfigService])
+        generate_document_usecase_1.GenerateDocumentUseCase, Object, Object])
 ], DocumentsController);
 //# sourceMappingURL=documents.controller.js.map

@@ -4,6 +4,47 @@ Este registro resume cambios de implementación para mantener contexto operativo
 
 ---
 
+## 2026-02-24 (Fase 3 - Hardening operacional y estabilización)
+
+### Added
+
+- Patrón Outbox endurecido para concurrencia multi-instancia: claim atómico con `findOneAndUpdate`, transición a `PROCESSING`, lease (`lockExpiresAt`) y control de `attempts < 10`.
+- `HttpExceptionFilter` global con formato consistente de error (`statusCode`, `message`, `error`, `timestamp`, `path`) y logging sin exponer stack traces al cliente.
+- Rate limiting global y por endpoint con `@nestjs/throttler` usando variables de entorno:
+  - `RATE_LIMIT_TTL`
+  - `RATE_LIMIT_GLOBAL`
+  - `RATE_LIMIT_QUERY`
+  - `RATE_LIMIT_UPLOAD`
+- Métricas Prometheus base con `@willsoto/nestjs-prometheus` y `prom-client`:
+  - `brain_documents_ingested_total`
+  - `brain_queries_total`
+  - `brain_query_errors_total`
+  - `brain_query_latency_ms`
+- `ChecksumService` (SHA-256) para idempotencia de ingesta documental.
+- ADR-0007: Hardening operacional para seguridad, confiabilidad e idempotencia.
+
+### Changed
+
+- `GraphSyncRetryService` ahora consume eventos vía claim atómico y evita incremento doble de intentos.
+- `ThrottlerGuard` registrado globalmente (`APP_GUARD`) y decoradores `@Throttle()` alineados por perfil (`query`, `upload`).
+- `FileUploadInterceptor` usa `ConfigService` para `MAX_FILE_SIZE_MB` y `ALLOWED_MIME_TYPES`.
+- `GraphRagQueryUseCase` integra `StructuredLogger` y métricas de volumen, errores y latencia.
+- `IngestDocumentUseCase` retorna documento existente por checksum y maneja condición de carrera por índice único (`E11000`).
+- Índice de `checksum` en Mongo reforzado como `unique + sparse` para garantizar idempotencia concurrente.
+
+### Fixed
+
+- Resolución de conflictos de merge y firmas de `ping()` inconsistentes entre Mongo, Neo4j y health checks.
+- Error de compilación por implementación duplicada de `ping()` en adaptador Neo4j.
+- Endpoint legacy de health (`src/health/health.controller.ts`) ajustado a contratos actuales.
+
+### Notes
+
+- Build validado en verde con `npm run build`.
+- Se mantiene una sola semántica de salud por excepción para Neo4j (`GraphStorePort.ping(): Promise<void>`) y por latencia para Mongo (`MongoDatabaseService.ping(): Promise<number>`).
+
+---
+
 ## 2026-02-24 (Fase 4 - Administración de corpus e índice)
 
 ### Added

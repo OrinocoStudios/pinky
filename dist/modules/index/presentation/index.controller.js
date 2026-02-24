@@ -14,8 +14,10 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.IndexController = void 0;
 const common_1 = require("@nestjs/common");
+const throttler_1 = require("@nestjs/throttler");
 const reindex_chunks_usecase_1 = require("../../ingestion/application/reindex-chunks.usecase");
 const index_dto_1 = require("./index.dto");
+const require_api_key_decorator_1 = require("../../../common/decorators/require-api-key.decorator");
 let IndexController = class IndexController {
     reindexChunksUseCase;
     constructor(reindexChunksUseCase) {
@@ -39,6 +41,8 @@ let IndexController = class IndexController {
 exports.IndexController = IndexController;
 __decorate([
     (0, common_1.Post)('rebuild'),
+    (0, throttler_1.Throttle)({ default: { ttl: 60000, limit: 2 } }),
+    (0, require_api_key_decorator_1.RequireApiKey)(),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [index_dto_1.ReindexDto]),
@@ -46,6 +50,8 @@ __decorate([
 ], IndexController.prototype, "rebuild", null);
 __decorate([
     (0, common_1.Post)('incremental'),
+    (0, throttler_1.Throttle)({ default: { ttl: 60000, limit: 3 } }),
+    (0, require_api_key_decorator_1.RequireApiKey)(),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [index_dto_1.ReindexDto]),

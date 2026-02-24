@@ -4,6 +4,7 @@ exports.default = () => ({
     app: {
         env: process.env.NODE_ENV ?? 'development',
         port: Number(process.env.PORT ?? 8081),
+        instanceId: process.env.APP_INSTANCE_ID,
         apiKey: process.env.API_KEY ?? '',
         enableApiKeyAuth: process.env.ENABLE_API_KEY_AUTH === 'true',
         searchEngine: (process.env.SEARCH_ENGINE ?? 'mongo'),
@@ -18,6 +19,7 @@ exports.default = () => ({
         rateLimitIngest: Number(process.env.RATE_LIMIT_INGEST ?? 5),
         maxFileSizeMB: Number(process.env.MAX_FILE_SIZE_MB ?? 10),
         allowedMimeTypes: (process.env.ALLOWED_MIME_TYPES ?? 'text/plain,text/markdown,application/json,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document').split(','),
+        enableChecksumValidation: process.env.ENABLE_CHECKSUM_VALIDATION !== 'false',
     },
     mongo: {
         uri: process.env.MONGODB_URI ?? 'mongodb://localhost:27021/brain_service',

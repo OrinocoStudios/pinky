@@ -26,13 +26,15 @@ let DefaultFileTextExtractorAdapter = class DefaultFileTextExtractorAdapter {
     }
     async extractPdf(buffer) {
         const pdfParseModule = await Promise.resolve().then(() => require('pdf-parse'));
-        const pdfParse = pdfParseModule.default ?? pdfParseModule;
+        const pdfParse = pdfParseModule.default ??
+            pdfParseModule;
         const parsed = await pdfParse(buffer);
         return parsed.text ?? '';
     }
     async extractDocx(buffer) {
         const mammothModule = await Promise.resolve().then(() => require('mammoth'));
-        const mammoth = mammothModule.default ?? mammothModule;
+        const mammoth = mammothModule.default ??
+            mammothModule;
         const result = await mammoth.extractRawText({ buffer });
         return result.value ?? '';
     }

@@ -75,6 +75,9 @@ let MongoDocumentRepository = class MongoDocumentRepository {
     async findDocumentById(documentId) {
         return (await this.db.documentsCollection.findOne({ documentId }));
     }
+    async findDocumentByChecksum(checksum) {
+        return (await this.db.documentsCollection.findOne({ checksum }));
+    }
     async enqueueGraphSyncEvent(documentId, graph) {
         const now = new Date().toISOString();
         const event = {
@@ -89,23 +92,42 @@ let MongoDocumentRepository = class MongoDocumentRepository {
         await this.db.graphSyncOutboxCollection.insertOne(event);
         return event;
     }
-    async getRetryableGraphSyncEvents(limit) {
-        return (await this.db.graphSyncOutboxCollection
-            .find({ status: { $in: ['PENDING', 'FAILED'] }, attempts: { $lt: 10 } })
-            .sort({ updatedAt: 1 })
-            .limit(limit)
-            .toArray());
+    async claimAndGetNextRetryableEvent() {
+        const now = new Date();
+        const nowIso = now.toISOString();
+        const lockExpiresAt = new Date(now.getTime() + 2 * 60 * 1000).toISOString();
+        const result = await this.db.graphSyncOutboxCollection.findOneAndUpdate({
+            status: { $in: ['PENDING', 'FAILED'] },
+            attempts: { $lt: 10 },
+            $or: [
+                { lockExpiresAt: { $exists: false } },
+                { lockExpiresAt: null },
+                { lockExpiresAt: { $lt: nowIso } },
+            ],
+        }, {
+            $set: {
+                status: 'PROCESSING',
+                updatedAt: nowIso,
+                lockExpiresAt,
+            },
+            $inc: { attempts: 1 },
+        }, { sort: { updatedAt: 1 }, returnDocument: 'after' });
+        return result;
     }
     async markGraphSyncEvent(eventId, status, details) {
         const now = new Date().toISOString();
-        await this.db.graphSyncOutboxCollection.updateOne({ eventId }, {
+        const update = {
             $set: {
                 status,
                 updatedAt: now,
                 ...(details?.attempts !== undefined ? { attempts: details.attempts } : {}),
                 ...(details?.lastError !== undefined ? { lastError: details.lastError } : {}),
             },
-        });
+        };
+        if (status !== 'PENDING') {
+            update.$unset = { lockExpiresAt: 1 };
+        }
+        await this.db.graphSyncOutboxCollection.updateOne({ eventId }, update);
     }
     async deleteDocument(documentId) {
         await this.db.chunksCollection.deleteMany({ documentId });

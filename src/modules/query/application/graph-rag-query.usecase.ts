@@ -1,9 +1,12 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { InjectMetric } from '@willsoto/nestjs-prometheus';
+import { Counter, Histogram } from 'prom-client';
 import { ANSWER_GENERATOR_PORT, CHUNK_SEARCH_PORT, GRAPH_STORE_PORT } from '../../../shared/di.tokens';
 import { ChunkSearchPort } from '../../search/domain/ports/chunk-search.port';
 import { GraphStorePort } from '../../graph/domain/ports/graph-store.port';
 import { AnswerGeneratorPort } from '../domain/ports/answer-generator.port';
 import { PromptTemplateService } from './prompt-template.service';
+import { StructuredLogger } from '../../../common/logger/structured-logger.service';
 
 export type GraphRagQueryInput = {
   query: string;
@@ -23,8 +26,6 @@ export type GraphRagQueryOutput = {
 
 @Injectable()
 export class GraphRagQueryUseCase {
-  private readonly logger = new Logger(GraphRagQueryUseCase.name);
-
   constructor(
     @Inject(CHUNK_SEARCH_PORT)
     private readonly chunkSearch: ChunkSearchPort,
@@ -33,10 +34,18 @@ export class GraphRagQueryUseCase {
     @Inject(ANSWER_GENERATOR_PORT)
     private readonly answerGenerator: AnswerGeneratorPort,
     private readonly promptTemplate: PromptTemplateService,
+    private readonly logger: StructuredLogger,
+    @InjectMetric('brain_queries_total')
+    private readonly queriesTotalCounter: Counter<string>,
+    @InjectMetric('brain_query_errors_total')
+    private readonly queryErrorsCounter: Counter<string>,
+    @InjectMetric('brain_query_latency_ms')
+    private readonly queryLatencyHistogram: Histogram<string>,
   ) {}
 
   async execute(input: GraphRagQueryInput): Promise<GraphRagQueryOutput> {
     const startTime = Date.now();
+    this.queriesTotalCounter.inc();
 
     try {
       // Step 1: Retrieve chunks from search engine
@@ -45,7 +54,9 @@ export class GraphRagQueryUseCase {
         topK: input.topK,
       });
 
-      this.logger.debug(`Retrieved ${chunks.length} chunks`);
+      this.logger.debug('Retrieved chunks for query', GraphRagQueryUseCase.name, {
+        chunks: chunks.length,
+      });
 
       // Step 2: Extract entity hints and query graph
       const entityHints = input.entityHints?.length
@@ -56,7 +67,10 @@ export class GraphRagQueryUseCase {
         entities.map((e) => e.entityId),
       );
 
-      this.logger.debug(`Retrieved ${entities.length} entities and ${relations.length} relations`);
+      this.logger.debug('Retrieved graph context for query', GraphRagQueryUseCase.name, {
+        entities: entities.length,
+        relations: relations.length,
+      });
 
       // Step 3: Build grounded prompt with IDs
       const contextSources = chunks.map((chunk, index) => ({
@@ -86,9 +100,13 @@ export class GraphRagQueryUseCase {
       });
 
       const latency = Date.now() - startTime;
-      this.logger.log(
-        `Query completed in ${latency}ms, model=${result.model}, tokens=${result.tokensUsed}, sources_cited=${result.sourcesUsed.length}`,
-      );
+      this.queryLatencyHistogram.observe(latency);
+      this.logger.log('GraphRAG query completed', GraphRagQueryUseCase.name, {
+        latencyMs: latency,
+        model: result.model,
+        tokensUsed: result.tokensUsed,
+        sourcesCited: result.sourcesUsed.length,
+      });
 
       return {
         prompt,
@@ -106,16 +124,18 @@ export class GraphRagQueryUseCase {
       };
     } catch (error) {
       const latency = Date.now() - startTime;
-      this.logger.error(`Query failed after ${latency}ms: ${error}`);
-
-      // Fallback response on error
-      return {
-        prompt: '',
-        answer: `Lo siento, ocurrió un error al procesar tu consulta: ${error instanceof Error ? error.message : 'Error desconocido'}`,
-        sourcesUsed: [],
-        fastContext: [],
-        truthFacts: [],
-      };
+      this.queryErrorsCounter.inc();
+      this.queryLatencyHistogram.observe(latency);
+      this.logger.error(
+        'GraphRAG query failed',
+        error instanceof Error ? error.stack : undefined,
+        GraphRagQueryUseCase.name,
+        {
+          latencyMs: latency,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        },
+      );
+      throw error;
     }
   }
 

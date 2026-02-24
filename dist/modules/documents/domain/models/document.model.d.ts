@@ -37,7 +37,7 @@ export interface DocumentChunk {
     endOffset?: number;
     createdAt: string;
 }
-export type OutboxEventStatus = 'PENDING' | 'FAILED' | 'SYNCED';
+export type OutboxEventStatus = 'PENDING' | 'PROCESSING' | 'FAILED' | 'SYNCED' | 'DEAD_LETTER';
 export interface GraphSyncOutboxEvent {
     eventId: string;
     documentId: string;
@@ -45,6 +45,9 @@ export interface GraphSyncOutboxEvent {
     status: OutboxEventStatus;
     attempts: number;
     lastError?: string;
+    lockExpiresAt?: string;
     createdAt: string;
     updatedAt: string;
+    claimedAt?: string;
+    claimedBy?: string;
 }

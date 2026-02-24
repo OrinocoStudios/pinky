@@ -7,6 +7,7 @@ export declare class Neo4jGraphStoreAdapter implements GraphStorePort, OnModuleD
     private readonly configService;
     private readonly driver;
     constructor(configService: ConfigService<BrainConfig>);
+    ping(): Promise<void>;
     upsertGraph(graph: ExtractedGraph): Promise<void>;
     findEntitiesByNames(names: string[]): Promise<GraphEntity[]>;
     findRelationshipsForEntityIds(entityIds: string[]): Promise<GraphRelationship[]>;

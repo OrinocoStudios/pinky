@@ -6,9 +6,11 @@ export declare class MongoDatabaseService implements OnModuleInit, OnModuleDestr
     private readonly configService;
     constructor(configService: ConfigService<BrainConfig>);
     onModuleInit(): Promise<void>;
+    private ensureIndexes;
     onModuleDestroy(): Promise<void>;
     get documentsCollection(): mongoose.mongo.Collection<mongoose.mongo.BSON.Document>;
     get chunksCollection(): mongoose.mongo.Collection<mongoose.mongo.BSON.Document>;
     get graphSyncOutboxCollection(): mongoose.mongo.Collection<mongoose.mongo.BSON.Document>;
+    ping(): Promise<number>;
     private getDb;
 }

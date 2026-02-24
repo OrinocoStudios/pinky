@@ -11,7 +11,7 @@ export class QueryController {
   constructor(private readonly graphRagQueryUseCase: GraphRagQueryUseCase) {}
 
   @Post('query')
-  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  @Throttle({ query: {} })
   @RequireApiKey()
   async query(@Body() body: QueryDto): Promise<QueryResponseDto> {
     this.logger.log(`Received query: "${body.query.substring(0, 100)}${body.query.length > 100 ? '...' : ''}"`);

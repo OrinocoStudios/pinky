@@ -47,7 +47,7 @@ let QueryController = QueryController_1 = class QueryController {
 exports.QueryController = QueryController;
 __decorate([
     (0, common_1.Post)('query'),
-    (0, throttler_1.Throttle)({ default: { ttl: 60000, limit: 5 } }),
+    (0, throttler_1.Throttle)({ query: {} }),
     (0, require_api_key_decorator_1.RequireApiKey)(),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),

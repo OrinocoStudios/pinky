@@ -15,34 +15,50 @@ var GraphRagQueryUseCase_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GraphRagQueryUseCase = void 0;
 const common_1 = require("@nestjs/common");
+const nestjs_prometheus_1 = require("@willsoto/nestjs-prometheus");
+const prom_client_1 = require("prom-client");
 const di_tokens_1 = require("../../../shared/di.tokens");
 const prompt_template_service_1 = require("./prompt-template.service");
+const structured_logger_service_1 = require("../../../common/logger/structured-logger.service");
 let GraphRagQueryUseCase = GraphRagQueryUseCase_1 = class GraphRagQueryUseCase {
     chunkSearch;
     graphStore;
     answerGenerator;
     promptTemplate;
-    logger = new common_1.Logger(GraphRagQueryUseCase_1.name);
-    constructor(chunkSearch, graphStore, answerGenerator, promptTemplate) {
+    logger;
+    queriesTotalCounter;
+    queryErrorsCounter;
+    queryLatencyHistogram;
+    constructor(chunkSearch, graphStore, answerGenerator, promptTemplate, logger, queriesTotalCounter, queryErrorsCounter, queryLatencyHistogram) {
         this.chunkSearch = chunkSearch;
         this.graphStore = graphStore;
         this.answerGenerator = answerGenerator;
         this.promptTemplate = promptTemplate;
+        this.logger = logger;
+        this.queriesTotalCounter = queriesTotalCounter;
+        this.queryErrorsCounter = queryErrorsCounter;
+        this.queryLatencyHistogram = queryLatencyHistogram;
     }
     async execute(input) {
         const startTime = Date.now();
+        this.queriesTotalCounter.inc();
         try {
             const chunks = await this.chunkSearch.hybridSearch({
                 queryText: input.query,
                 topK: input.topK,
             });
-            this.logger.debug(`Retrieved ${chunks.length} chunks`);
+            this.logger.debug('Retrieved chunks for query', GraphRagQueryUseCase_1.name, {
+                chunks: chunks.length,
+            });
             const entityHints = input.entityHints?.length
                 ? input.entityHints
                 : this.extractEntityHintsFromQuery(input.query);
             const entities = await this.graphStore.findEntitiesByNames(entityHints);
             const relations = await this.graphStore.findRelationshipsForEntityIds(entities.map((e) => e.entityId));
-            this.logger.debug(`Retrieved ${entities.length} entities and ${relations.length} relations`);
+            this.logger.debug('Retrieved graph context for query', GraphRagQueryUseCase_1.name, {
+                entities: entities.length,
+                relations: relations.length,
+            });
             const contextSources = chunks.map((chunk, index) => ({
                 id: chunk.chunkId,
                 text: chunk.text,
@@ -65,7 +81,13 @@ let GraphRagQueryUseCase = GraphRagQueryUseCase_1 = class GraphRagQueryUseCase {
                 maxTokens: undefined,
             });
             const latency = Date.now() - startTime;
-            this.logger.log(`Query completed in ${latency}ms, model=${result.model}, tokens=${result.tokensUsed}, sources_cited=${result.sourcesUsed.length}`);
+            this.queryLatencyHistogram.observe(latency);
+            this.logger.log('GraphRAG query completed', GraphRagQueryUseCase_1.name, {
+                latencyMs: latency,
+                model: result.model,
+                tokensUsed: result.tokensUsed,
+                sourcesCited: result.sourcesUsed.length,
+            });
             return {
                 prompt,
                 answer: result.answer,
@@ -83,14 +105,13 @@ let GraphRagQueryUseCase = GraphRagQueryUseCase_1 = class GraphRagQueryUseCase {
         }
         catch (error) {
             const latency = Date.now() - startTime;
-            this.logger.error(`Query failed after ${latency}ms: ${error}`);
-            return {
-                prompt: '',
-                answer: `Lo siento, ocurrió un error al procesar tu consulta: ${error instanceof Error ? error.message : 'Error desconocido'}`,
-                sourcesUsed: [],
-                fastContext: [],
-                truthFacts: [],
-            };
+            this.queryErrorsCounter.inc();
+            this.queryLatencyHistogram.observe(latency);
+            this.logger.error('GraphRAG query failed', error instanceof Error ? error.stack : undefined, GraphRagQueryUseCase_1.name, {
+                latencyMs: latency,
+                errorMessage: error instanceof Error ? error.message : String(error),
+            });
+            throw error;
         }
     }
     extractEntityHintsFromQuery(query) {
@@ -108,6 +129,13 @@ exports.GraphRagQueryUseCase = GraphRagQueryUseCase = GraphRagQueryUseCase_1 = _
     __param(0, (0, common_1.Inject)(di_tokens_1.CHUNK_SEARCH_PORT)),
     __param(1, (0, common_1.Inject)(di_tokens_1.GRAPH_STORE_PORT)),
     __param(2, (0, common_1.Inject)(di_tokens_1.ANSWER_GENERATOR_PORT)),
-    __metadata("design:paramtypes", [Object, Object, Object, prompt_template_service_1.PromptTemplateService])
+    __param(5, (0, nestjs_prometheus_1.InjectMetric)('brain_queries_total')),
+    __param(6, (0, nestjs_prometheus_1.InjectMetric)('brain_query_errors_total')),
+    __param(7, (0, nestjs_prometheus_1.InjectMetric)('brain_query_latency_ms')),
+    __metadata("design:paramtypes", [Object, Object, Object, prompt_template_service_1.PromptTemplateService,
+        structured_logger_service_1.StructuredLogger,
+        prom_client_1.Counter,
+        prom_client_1.Counter,
+        prom_client_1.Histogram])
 ], GraphRagQueryUseCase);
 //# sourceMappingURL=graph-rag-query.usecase.js.map

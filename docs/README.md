@@ -24,6 +24,7 @@ Esta carpeta (`memory_architecture/brain_service/docs`) es la fuente oficial de 
 - [ADR-0004 - Pipeline de Consulta GraphRAG](ADR/ADR-0004-graphrag-query-pipeline.md)
 - [ADR-0005 - Ollama para embeddings y extracción estructurada](ADR/ADR-0005-ollama-embeddings-extraction.md)
 - [ADR-0006 - Administración de corpus por API](ADR/ADR-0006-corpus-administration-api.md)
+- [ADR-0007 - Hardening operacional (seguridad, confiabilidad e idempotencia)](ADR/ADR-0007-operational-hardening-security-reliability.md)
 
 ## Convención de actualización
 

@@ -1,4 +1,7 @@
-import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Inject, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { InjectMetric } from '@willsoto/nestjs-prometheus';
+import { Counter } from 'prom-client';
 import { randomUUID } from 'node:crypto';
 import {
   DOCUMENT_REPOSITORY,
@@ -12,6 +15,8 @@ import { DocumentRecord } from '../../documents/domain/models/document.model';
 import { EmbeddingPort } from '../domain/ports/embedding.port';
 import { GraphExtractorPort } from '../domain/ports/graph-extractor.port';
 import { SimpleChunkerService } from './simple-chunker.service';
+import { ChecksumService } from '../../../common/utils/checksum.service';
+import { BrainConfig } from '../../../config/configuration';
 
 export type IngestDocumentInput = {
   title?: string;
@@ -22,6 +27,8 @@ export type IngestDocumentInput = {
 
 @Injectable()
 export class IngestDocumentUseCase {
+  private readonly logger = new Logger(IngestDocumentUseCase.name);
+
   constructor(
     @Inject(DOCUMENT_REPOSITORY)
     private readonly documentRepository: DocumentRepositoryPort,
@@ -32,9 +39,23 @@ export class IngestDocumentUseCase {
     @Inject(GRAPH_EXTRACTOR_PORT)
     private readonly graphExtractor: GraphExtractorPort,
     private readonly chunker: SimpleChunkerService,
+    private readonly checksumService: ChecksumService,
+    private readonly configService: ConfigService<BrainConfig>,
+    @InjectMetric('brain_documents_ingested_total')
+    private readonly documentsIngestedCounter: Counter<string>,
   ) {}
 
   async execute(input: IngestDocumentInput): Promise<DocumentRecord> {
+    const checksum = this.checksumService.calculate(input.rawText);
+    const enableChecksum = this.configService.get('app.enableChecksumValidation', { infer: true });
+    if (enableChecksum) {
+      const existing = await this.documentRepository.findDocumentByChecksum(checksum);
+      if (existing) {
+        this.logger.log(`Document already exists (checksum match): ${existing.documentId}`);
+        return existing;
+      }
+    }
+
     const documentId = randomUUID();
     const embeddingModel = this.embeddingPort.getModelId();
     const extractionModel = this.graphExtractor.getModelId();
@@ -43,16 +64,30 @@ export class IngestDocumentUseCase {
       embedding_model: embeddingModel,
       extraction_model: extractionModel,
     };
-
-    const created = await this.documentRepository.createDocument({
-      documentId,
-      title: input.title,
-      rawText: input.rawText,
-      source: input.source,
-      status: 'RECEIVED',
-      graphSyncStatus: 'PENDING',
-      metadata: docMetadata,
-    });
+    let created: DocumentRecord;
+    try {
+      created = await this.documentRepository.createDocument({
+        documentId,
+        title: input.title,
+        rawText: input.rawText,
+        source: input.source,
+        status: 'RECEIVED',
+        graphSyncStatus: 'PENDING',
+        checksum,
+        metadata: docMetadata,
+      });
+    } catch (error) {
+      if (enableChecksum && this.isDuplicateChecksumError(error)) {
+        const existing = await this.documentRepository.findDocumentByChecksum(checksum);
+        if (existing) {
+          this.logger.log(
+            `Document already exists after concurrent insert attempt (checksum match): ${existing.documentId}`,
+          );
+          return existing;
+        }
+      }
+      throw error;
+    }
 
     try {
       const chunks = this.chunker.chunk(documentId, input.rawText);
@@ -70,11 +105,12 @@ export class IngestDocumentUseCase {
       const extractedGraph = await this.graphExtractor.extract(documentId, chunkInputs);
       const syncEvent = await this.documentRepository.enqueueGraphSyncEvent(documentId, extractedGraph);
       await this.graphStore.upsertGraph(extractedGraph);
+      await this.documentRepository.updateDocumentStatus(documentId, 'READY', 'SYNCED');
       await this.documentRepository.markGraphSyncEvent(syncEvent.eventId, 'SYNCED', {
         attempts: 1,
         lastError: '',
       });
-      await this.documentRepository.updateDocumentStatus(documentId, 'READY', 'SYNCED');
+      this.documentsIngestedCounter.inc();
     } catch (error) {
       await this.documentRepository.updateDocumentStatus(documentId, 'ERROR', 'FAILED');
       throw new InternalServerErrorException({
@@ -85,5 +121,13 @@ export class IngestDocumentUseCase {
     }
 
     return (await this.documentRepository.findDocumentById(documentId)) ?? created;
+  }
+
+  private isDuplicateChecksumError(error: unknown): boolean {
+    if (!error || typeof error !== 'object') {
+      return false;
+    }
+    const maybeError = error as { code?: number; message?: string };
+    return maybeError.code === 11000 && maybeError.message?.includes('checksum') === true;
   }
 }

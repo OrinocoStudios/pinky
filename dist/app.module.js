@@ -8,10 +8,12 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
+const core_1 = require("@nestjs/core");
 const config_1 = require("@nestjs/config");
 const throttler_1 = require("@nestjs/throttler");
+const nestjs_prometheus_1 = require("@willsoto/nestjs-prometheus");
 const configuration_1 = require("./config/configuration");
-const app_controller_1 = require("./app.controller");
+const health_controller_1 = require("./modules/health/health.controller");
 const di_tokens_1 = require("./shared/di.tokens");
 const mongo_document_repository_1 = require("./modules/documents/infrastructure/mongo/mongo-document.repository");
 const mongo_chunk_search_adapter_1 = require("./modules/search/infrastructure/mongo/mongo-chunk-search.adapter");
@@ -24,6 +26,7 @@ const template_document_generator_adapter_1 = require("./modules/documents/infra
 const reindex_chunks_usecase_1 = require("./modules/ingestion/application/reindex-chunks.usecase");
 const graph_rag_query_usecase_1 = require("./modules/query/application/graph-rag-query.usecase");
 const documents_controller_1 = require("./modules/documents/presentation/documents.controller");
+const mongo_database_service_1 = require("./modules/documents/infrastructure/mongo/mongo-database.service");
 const simple_chunker_service_1 = require("./modules/ingestion/application/simple-chunker.service");
 const default_file_text_extractor_adapter_1 = require("./modules/ingestion/infrastructure/extractors/default-file-text-extractor.adapter");
 const ollama_embedding_adapter_1 = require("./modules/ingestion/infrastructure/ollama/ollama-embedding.adapter");
@@ -37,6 +40,9 @@ const graph_sync_retry_service_1 = require("./modules/ingestion/application/grap
 const outbox_controller_1 = require("./modules/ingestion/presentation/outbox.controller");
 const index_controller_1 = require("./modules/index/presentation/index.controller");
 const api_key_guard_1 = require("./common/guards/api-key.guard");
+const file_upload_interceptor_1 = require("./common/interceptors/file-upload.interceptor");
+const checksum_service_1 = require("./common/utils/checksum.service");
+const structured_logger_service_1 = require("./common/logger/structured-logger.service");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -47,17 +53,67 @@ exports.AppModule = AppModule = __decorate([
                 isGlobal: true,
                 load: [configuration_1.default],
             }),
-            throttler_1.ThrottlerModule.forRoot([
-                {
-                    name: 'short',
-                    ttl: 1000,
-                    limit: 3,
+            nestjs_prometheus_1.PrometheusModule.register({
+                path: '/metrics',
+                defaultMetrics: { enabled: true },
+            }),
+            throttler_1.ThrottlerModule.forRootAsync({
+                inject: [config_1.ConfigService],
+                useFactory: (configService) => {
+                    const ttl = configService.get('app.rateLimitTtl', { infer: true }) ?? 60000;
+                    const globalLimit = configService.get('app.rateLimitGlobal', { infer: true }) ?? 10;
+                    const queryLimit = configService.get('app.rateLimitQuery', { infer: true }) ?? 5;
+                    const uploadLimit = configService.get('app.rateLimitUpload', { infer: true }) ?? 3;
+                    return [
+                        {
+                            name: 'default',
+                            ttl,
+                            limit: globalLimit,
+                        },
+                        {
+                            name: 'query',
+                            ttl,
+                            limit: queryLimit,
+                        },
+                        {
+                            name: 'upload',
+                            ttl,
+                            limit: uploadLimit,
+                        },
+                    ];
                 },
-            ]),
+            }),
         ],
-        controllers: [app_controller_1.AppController, documents_controller_1.DocumentsController, query_controller_1.QueryController, outbox_controller_1.OutboxController, index_controller_1.IndexController],
+        controllers: [
+            health_controller_1.HealthController,
+            documents_controller_1.DocumentsController,
+            query_controller_1.QueryController,
+            outbox_controller_1.OutboxController,
+            index_controller_1.IndexController,
+        ],
         providers: [
+            mongo_database_service_1.MongoDatabaseService,
             api_key_guard_1.ApiKeyGuard,
+            file_upload_interceptor_1.FileUploadInterceptor,
+            checksum_service_1.ChecksumService,
+            structured_logger_service_1.StructuredLogger,
+            (0, nestjs_prometheus_1.makeCounterProvider)({
+                name: 'brain_documents_ingested_total',
+                help: 'Total number of successfully ingested documents.',
+            }),
+            (0, nestjs_prometheus_1.makeCounterProvider)({
+                name: 'brain_queries_total',
+                help: 'Total number of GraphRAG queries handled.',
+            }),
+            (0, nestjs_prometheus_1.makeCounterProvider)({
+                name: 'brain_query_errors_total',
+                help: 'Total number of GraphRAG query failures.',
+            }),
+            (0, nestjs_prometheus_1.makeHistogramProvider)({
+                name: 'brain_query_latency_ms',
+                help: 'GraphRAG query execution latency in milliseconds.',
+                buckets: [50, 100, 250, 500, 1000, 2000, 5000, 10000],
+            }),
             ingest_document_usecase_1.IngestDocumentUseCase,
             delete_document_usecase_1.DeleteDocumentUseCase,
             generate_document_usecase_1.GenerateDocumentUseCase,
@@ -75,6 +131,10 @@ exports.AppModule = AppModule = __decorate([
             anthropic_answer_generator_adapter_1.AnthropicAnswerGeneratorAdapter,
             ollama_embedding_adapter_1.OllamaEmbeddingAdapter,
             ollama_graph_extractor_adapter_1.OllamaGraphExtractorAdapter,
+            {
+                provide: core_1.APP_GUARD,
+                useClass: throttler_1.ThrottlerGuard,
+            },
             {
                 provide: di_tokens_1.DOCUMENT_REPOSITORY,
                 useClass: mongo_document_repository_1.MongoDocumentRepository,

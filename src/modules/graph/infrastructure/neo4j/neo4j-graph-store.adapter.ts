@@ -21,6 +21,15 @@ export class Neo4jGraphStoreAdapter implements GraphStorePort, OnModuleDestroy {
     this.driver = neo4jDriver(uri, auth.basic(user, password));
   }
 
+  async ping(): Promise<void> {
+    const session = this.createSession();
+    try {
+      await session.run('RETURN 1');
+    } finally {
+      await session.close();
+    }
+  }
+
   async upsertGraph(graph: ExtractedGraph): Promise<void> {
     const session = this.createSession();
     try {
@@ -152,23 +161,23 @@ export class Neo4jGraphStoreAdapter implements GraphStorePort, OnModuleDestroy {
 
   async deleteByDocumentId(documentId: string): Promise<void> {
     const session = this.createSession();
-    const entityPattern = `::${documentId}::`;
     try {
+      // Use Document->Entity MENTIONS relationship for reliable deletion
+      // instead of string matching on entityId
       await session.run(
         `
-        MATCH (a:Entity)-[r:RELATED]-(b:Entity)
-        WHERE a.entityId CONTAINS $pattern OR b.entityId CONTAINS $pattern
+        MATCH (d:Document {documentId: $documentId})-[:MENTIONS]->(e:Entity)
+        MATCH (e)-[r:RELATED]-(other)
         DELETE r
         `,
-        { pattern: entityPattern },
+        { documentId },
       );
       await session.run(
         `
-        MATCH (e:Entity)
-        WHERE e.entityId CONTAINS $pattern
+        MATCH (d:Document {documentId: $documentId})-[:MENTIONS]->(e:Entity)
         DETACH DELETE e
         `,
-        { pattern: entityPattern },
+        { documentId },
       );
       await session.run(
         `

@@ -14,8 +14,9 @@ export interface DocumentRepositoryPort {
   updateChunkEmbedding(chunkId: string, embedding: number[], embeddingModel: string): Promise<void>;
   listDocuments(limit?: number): Promise<DocumentRecord[]>;
   findDocumentById(documentId: string): Promise<DocumentRecord | null>;
+  findDocumentByChecksum(checksum: string): Promise<DocumentRecord | null>;
   enqueueGraphSyncEvent(documentId: string, graph: ExtractedGraph): Promise<GraphSyncOutboxEvent>;
-  getRetryableGraphSyncEvents(limit: number): Promise<GraphSyncOutboxEvent[]>;
+  claimAndGetNextRetryableEvent(): Promise<GraphSyncOutboxEvent | null>;
   markGraphSyncEvent(
     eventId: string,
     status: GraphSyncOutboxEvent['status'],

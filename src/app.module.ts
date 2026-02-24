@@ -1,8 +1,14 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import {
+  PrometheusModule,
+  makeCounterProvider,
+  makeHistogramProvider,
+} from '@willsoto/nestjs-prometheus';
 import configuration, { BrainConfig } from './config/configuration';
-import { AppController } from './app.controller';
+import { HealthController } from './modules/health/health.controller';
 import {
   ANSWER_GENERATOR_PORT,
   CHUNK_SEARCH_PORT,
@@ -39,6 +45,9 @@ import { OutboxController } from './modules/ingestion/presentation/outbox.contro
 import { IndexController } from './modules/index/presentation/index.controller';
 import { ApiKeyGuard } from './common/guards/api-key.guard';
 import { RequireApiKey } from './common/decorators/require-api-key.decorator';
+import { FileUploadInterceptor } from './common/interceptors/file-upload.interceptor';
+import { ChecksumService } from './common/utils/checksum.service';
+import { StructuredLogger } from './common/logger/structured-logger.service';
 
 @Module({
   imports: [
@@ -46,17 +55,68 @@ import { RequireApiKey } from './common/decorators/require-api-key.decorator';
       isGlobal: true,
       load: [configuration],
     }),
-    ThrottlerModule.forRoot([
-      {
-        name: 'short',
-        ttl: 1000,
-        limit: 3,
+    PrometheusModule.register({
+      path: '/metrics',
+      defaultMetrics: { enabled: true },
+    }),
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService<BrainConfig>) => {
+        const ttl = configService.get<number>('app.rateLimitTtl', { infer: true }) ?? 60000;
+        const globalLimit = configService.get<number>('app.rateLimitGlobal', { infer: true }) ?? 10;
+        const queryLimit = configService.get<number>('app.rateLimitQuery', { infer: true }) ?? 5;
+        const uploadLimit = configService.get<number>('app.rateLimitUpload', { infer: true }) ?? 3;
+
+        return [
+          {
+            name: 'default',
+            ttl,
+            limit: globalLimit,
+          },
+          {
+            name: 'query',
+            ttl,
+            limit: queryLimit,
+          },
+          {
+            name: 'upload',
+            ttl,
+            limit: uploadLimit,
+          },
+        ];
       },
-    ]),
+    }),
   ],
-  controllers: [AppController, DocumentsController, QueryController, OutboxController, IndexController],
+  controllers: [
+    HealthController,
+    DocumentsController,
+    QueryController,
+    OutboxController,
+    IndexController,
+  ],
   providers: [
+    MongoDatabaseService,
     ApiKeyGuard,
+    FileUploadInterceptor,
+    ChecksumService,
+    StructuredLogger,
+    makeCounterProvider({
+      name: 'brain_documents_ingested_total',
+      help: 'Total number of successfully ingested documents.',
+    }),
+    makeCounterProvider({
+      name: 'brain_queries_total',
+      help: 'Total number of GraphRAG queries handled.',
+    }),
+    makeCounterProvider({
+      name: 'brain_query_errors_total',
+      help: 'Total number of GraphRAG query failures.',
+    }),
+    makeHistogramProvider({
+      name: 'brain_query_latency_ms',
+      help: 'GraphRAG query execution latency in milliseconds.',
+      buckets: [50, 100, 250, 500, 1000, 2000, 5000, 10000],
+    }),
     IngestDocumentUseCase,
     DeleteDocumentUseCase,
     GenerateDocumentUseCase,
@@ -74,6 +134,10 @@ import { RequireApiKey } from './common/decorators/require-api-key.decorator';
     AnthropicAnswerGeneratorAdapter,
     OllamaEmbeddingAdapter,
     OllamaGraphExtractorAdapter,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
     {
       provide: DOCUMENT_REPOSITORY,
       useClass: MongoDocumentRepository,

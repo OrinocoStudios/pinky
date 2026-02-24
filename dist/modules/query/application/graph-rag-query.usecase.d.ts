@@ -1,7 +1,9 @@
+import { Counter, Histogram } from 'prom-client';
 import { ChunkSearchPort } from '../../search/domain/ports/chunk-search.port';
 import { GraphStorePort } from '../../graph/domain/ports/graph-store.port';
 import { AnswerGeneratorPort } from '../domain/ports/answer-generator.port';
 import { PromptTemplateService } from './prompt-template.service';
+import { StructuredLogger } from '../../../common/logger/structured-logger.service';
 export type GraphRagQueryInput = {
     query: string;
     entityHints?: string[];
@@ -30,7 +32,10 @@ export declare class GraphRagQueryUseCase {
     private readonly answerGenerator;
     private readonly promptTemplate;
     private readonly logger;
-    constructor(chunkSearch: ChunkSearchPort, graphStore: GraphStorePort, answerGenerator: AnswerGeneratorPort, promptTemplate: PromptTemplateService);
+    private readonly queriesTotalCounter;
+    private readonly queryErrorsCounter;
+    private readonly queryLatencyHistogram;
+    constructor(chunkSearch: ChunkSearchPort, graphStore: GraphStorePort, answerGenerator: AnswerGeneratorPort, promptTemplate: PromptTemplateService, logger: StructuredLogger, queriesTotalCounter: Counter<string>, queryErrorsCounter: Counter<string>, queryLatencyHistogram: Histogram<string>);
     execute(input: GraphRagQueryInput): Promise<GraphRagQueryOutput>;
     private extractEntityHintsFromQuery;
 }

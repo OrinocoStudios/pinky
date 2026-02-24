@@ -26,6 +26,15 @@ let Neo4jGraphStoreAdapter = class Neo4jGraphStoreAdapter {
         }
         this.driver = (0, neo4j_driver_1.driver)(uri, neo4j_driver_1.auth.basic(user, password));
     }
+    async ping() {
+        const session = this.createSession();
+        try {
+            await session.run('RETURN 1');
+        }
+        finally {
+            await session.close();
+        }
+    }
     async upsertGraph(graph) {
         const session = this.createSession();
         try {
@@ -132,18 +141,16 @@ let Neo4jGraphStoreAdapter = class Neo4jGraphStoreAdapter {
     }
     async deleteByDocumentId(documentId) {
         const session = this.createSession();
-        const entityPattern = `::${documentId}::`;
         try {
             await session.run(`
-        MATCH (a:Entity)-[r:RELATED]-(b:Entity)
-        WHERE a.entityId CONTAINS $pattern OR b.entityId CONTAINS $pattern
+        MATCH (d:Document {documentId: $documentId})-[:MENTIONS]->(e:Entity)
+        MATCH (e)-[r:RELATED]-(other)
         DELETE r
-        `, { pattern: entityPattern });
+        `, { documentId });
             await session.run(`
-        MATCH (e:Entity)
-        WHERE e.entityId CONTAINS $pattern
+        MATCH (d:Document {documentId: $documentId})-[:MENTIONS]->(e:Entity)
         DETACH DELETE e
-        `, { pattern: entityPattern });
+        `, { documentId });
             await session.run(`
         MATCH (d:Document {documentId: $documentId})
         DETACH DELETE d
