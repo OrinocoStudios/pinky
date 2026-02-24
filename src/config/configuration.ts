@@ -97,7 +97,7 @@ export default (): BrainConfig => ({
   neo4j: {
     uri: process.env.NEO4J_URI ?? 'bolt://localhost:7688',
     user: process.env.NEO4J_USER ?? 'neo4j',
-    password: process.env.NEO4J_PASSWORD ?? '',
+    password: process.env.NEO4J_PASSWORD ?? 'neo4j_password',
   },
   redis: {
     url: process.env.REDIS_URL ?? 'redis://localhost:6381',
