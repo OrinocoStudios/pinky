@@ -23,5 +23,22 @@ services:
           cpus: "1.0"
           memory: 2G
 
+  ollama-setup:
+    image: curlimages/curl:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        echo "Pulling embedding model: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}..."
+        curl -sf http://ollama:11434/api/pull -d '{"name":"'${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}'"}'
+        echo ""
+        echo "Pulling LLM model: ${OLLAMA_LLM_MODEL:-llama3.2}..."
+        curl -sf http://ollama:11434/api/pull -d '{"name":"'${OLLAMA_LLM_MODEL:-llama3.2}'"}'
+        echo ""
+        echo "All models ready."
+
 volumes:
   ollama-models:

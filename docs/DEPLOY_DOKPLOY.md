@@ -13,6 +13,11 @@ El despliegue se divide en **dos servicios Compose independientes**:
 1. **brain-service** (`docker-compose.prod.yml`): API NestJS + MongoDB + Neo4j + Redis
 2. **ollama** (`docker-compose.ollama.yml`): Servidor de modelos LLM (embeddings + extracción)
 
+Además, el repositorio incluye **Dockerfiles separados por despliegue** para uso directo en Dokploy con GitHub:
+
+- `Dockerfile.prod` para `brain-service`
+- `Dockerfile.ollama` para `ollama`
+
 Ollama se separa para poder moverlo a un servidor con GPU en el futuro sin cambiar nada en la app — solo cambiando `OLLAMA_BASE_URL`.
 
 ---

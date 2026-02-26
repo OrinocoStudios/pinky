@@ -9,6 +9,9 @@
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
     "lint": "eslint \"src/**/*.ts\"",
+    "test": "jest",
+    "test:e2e": "jest --config jest-e2e.config.ts",
+    "test:ci": "jest --config jest-e2e.config.ts --ci --forceExit",
     "reindex": "node dist/scripts/reindex-chunks.js"
   },
   "dependencies": {
@@ -36,9 +39,14 @@
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.0",
     "@types/body-parser": "^1.19.6",
+    "@types/jest": "^30.0.0",
     "@types/multer": "^2.0.0",
     "@types/node": "^22.7.4",
+    "@types/supertest": "^7.2.0",
     "eslint": "^9.0.0",
+    "jest": "^30.2.0",
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.4.6",
     "typescript": "^5.6.2"
   }
 }
