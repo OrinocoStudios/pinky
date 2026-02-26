@@ -1,0 +1,148 @@
+services:
+  brain-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      - PORT=${PORT:-8081}
+      - NODE_ENV=${NODE_ENV:-production}
+      - API_KEY=${API_KEY:-change-me-in-production}
+      - ENABLE_API_KEY_AUTH=${ENABLE_API_KEY_AUTH:-true}
+      - RATE_LIMIT_TTL=${RATE_LIMIT_TTL:-60000}
+      - RATE_LIMIT_GLOBAL=${RATE_LIMIT_GLOBAL:-20}
+      - RATE_LIMIT_QUERY=${RATE_LIMIT_QUERY:-10}
+      - RATE_LIMIT_UPLOAD=${RATE_LIMIT_UPLOAD:-5}
+      - RATE_LIMIT_INGEST=${RATE_LIMIT_INGEST:-10}
+      - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-10}
+      - ALLOWED_MIME_TYPES=${ALLOWED_MIME_TYPES:-text/plain,text/markdown,application/json,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document}
+      - ENABLE_CHECKSUM_VALIDATION=${ENABLE_CHECKSUM_VALIDATION:-true}
+      - SEARCH_ENGINE=${SEARCH_ENGINE:-mongo}
+      - MONGODB_URI=mongodb://mongo:27017/${MONGODB_DB:-brain_service}
+      - MONGODB_DB=${MONGODB_DB:-brain_service}
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=${NEO4J_USER:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-neo4j_password}
+      - REDIS_URL=redis://redis:6379
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
+      - OLLAMA_EXTRACTION_MODEL=${OLLAMA_EXTRACTION_MODEL:-llama3.2}
+      - OLLAMA_TIMEOUT_MS=${OLLAMA_TIMEOUT_MS:-120000}
+      - OBJECT_STORE_PATH=/app/data/objects
+      - TOP_K=${TOP_K:-8}
+      - CHUNK_SIZE=${CHUNK_SIZE:-1200}
+      - CHUNK_OVERLAP=${CHUNK_OVERLAP:-200}
+      - LLM_PROVIDER=${LLM_PROVIDER:-local}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.2}
+      - OPENAI_MAX_TOKENS=${OPENAI_MAX_TOKENS:-1000}
+      - OPENAI_TIMEOUT_MS=${OPENAI_TIMEOUT_MS:-30000}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-3-5-sonnet-20241022}
+      - ANTHROPIC_TEMPERATURE=${ANTHROPIC_TEMPERATURE:-0.2}
+      - ANTHROPIC_MAX_TOKENS=${ANTHROPIC_MAX_TOKENS:-1000}
+      - ANTHROPIC_TIMEOUT_MS=${ANTHROPIC_TIMEOUT_MS:-30000}
+    ports:
+      - "${PORT:-8081}:8081"
+    volumes:
+      - brain-objects:/app/data/objects
+    depends_on:
+      mongo:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - dokploy-network
+      - brain-internal
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+
+  mongo:
+    image: mongo:7
+    restart: always
+    volumes:
+      - brain-mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - brain-internal
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+  neo4j:
+    image: neo4j:5
+    restart: always
+    environment:
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-neo4j_password}
+      - NEO4J_PLUGINS=["apoc"]
+    volumes:
+      - brain-neo4j-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - brain-internal
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 3G
+        reservations:
+          cpus: "0.25"
+          memory: 512M
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    volumes:
+      - brain-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - brain-internal
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+
+volumes:
+  brain-objects:
+  brain-mongo-data:
+  brain-neo4j-data:
+  brain-redis-data:
+
+networks:
+  dokploy-network:
+    external: true
+  brain-internal:
+    driver: bridge
