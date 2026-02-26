@@ -13,10 +13,11 @@ El despliegue se divide en **dos servicios Compose independientes**:
 1. **brain-service** (`docker-compose.prod.yml`): API NestJS + MongoDB + Neo4j + Redis
 2. **ollama** (`docker-compose.ollama.yml`): Servidor de modelos LLM (embeddings + extracción)
 
-Además, el repositorio incluye **Dockerfiles separados por despliegue** para uso directo en Dokploy con GitHub:
+La imagen de `brain-service` se construye y publica automáticamente en **GitHub Container Registry** (GHCR) mediante GitHub Actions. El flujo es:
 
-- `Dockerfile.prod` para `brain-service`
-- `Dockerfile.ollama` para `ollama`
+1. Push a `main` → CI (build + tests)
+2. CI pasa → Docker workflow construye y publica `ghcr.io/orinocostudios/pinky:latest`
+3. Dokploy hace pull de la imagen publicada
 
 Ollama se separa para poder moverlo a un servidor con GPU en el futuro sin cambiar nada en la app — solo cambiando `OLLAMA_BASE_URL`.
 
@@ -29,18 +30,8 @@ Ollama se separa para poder moverlo a un servidor con GPU en el futuro sin cambi
 3. Conectar el repositorio Git y seleccionar la rama `main`.
 4. En **Compose Path**, escribir: `docker-compose.ollama.yml`
 5. Click en **Save** y luego **Deploy**.
-6. Una vez desplegado, abrir la terminal del contenedor `ollama` desde Dokploy y ejecutar:
 
-```bash
-ollama pull nomic-embed-text
-ollama pull llama3.2
-```
-
-7. Verificar que los modelos estén listos:
-
-```bash
-ollama list
-```
+El servicio `ollama-setup` descargará automáticamente los modelos `nomic-embed-text` y `llama3.2` una vez que Ollama esté healthy. Se puede personalizar con las variables `OLLAMA_EMBEDDING_MODEL` y `OLLAMA_LLM_MODEL`.
 
 > **Nota**: La descarga de modelos puede tomar varios minutos (~2.3GB total). Solo es necesario hacerlo una vez — los modelos persisten en el volumen `ollama-models`.
 
@@ -51,8 +42,14 @@ ollama list
 1. En el mismo proyecto, crear **otro servicio Compose**.
 2. Conectar el mismo repositorio Git, rama `main`.
 3. En **Compose Path**, escribir: `docker-compose.prod.yml`
-4. Ir a la pestaña **Environment** y configurar las variables (ver sección abajo).
-5. Click en **Save** y luego **Deploy**.
+4. Si el repositorio es privado, configurar las credenciales de GHCR en Dokploy:
+   - **Registry URL**: `ghcr.io`
+   - **Username**: tu usuario de GitHub
+   - **Password**: un Personal Access Token (PAT) con scope `read:packages`
+5. Ir a la pestaña **Environment** y configurar las variables (ver sección abajo).
+6. Click en **Save** y luego **Deploy**.
+
+El compose usa `image: ghcr.io/orinocostudios/pinky:latest` por defecto. Se puede cambiar con la variable `BRAIN_IMAGE` para apuntar a un tag específico (ej: un SHA de commit).
 
 El servicio esperará a que MongoDB, Neo4j y Redis pasen sus healthchecks antes de arrancar.
 
@@ -169,6 +166,11 @@ Los logs del servicio son JSON estructurado. Se pueden ver directamente en la UI
 
 ### Actualizar
 
-Para actualizar el servicio después de un push al repositorio:
-1. Ir al servicio en Dokploy.
-2. Click en **Deploy** (Dokploy hace pull del repo, rebuild de la imagen, y restart con zero-downtime).
+El flujo de actualización es automático:
+1. Push a `main` → GitHub Actions ejecuta CI (build + tests).
+2. Si CI pasa → se construye y publica la nueva imagen en GHCR.
+3. En Dokploy, click en **Deploy** en el servicio brain-service (hace pull de la imagen nueva).
+
+Opcionalmente, se puede configurar un **webhook** en Dokploy para que el deploy sea totalmente automático tras cada push exitoso.
+
+Para pinear una versión específica, configurar `BRAIN_IMAGE=ghcr.io/orinocostudios/pinky:<sha>` en las variables de entorno.

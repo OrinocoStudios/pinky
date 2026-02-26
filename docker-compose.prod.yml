@@ -1,8 +1,6 @@
 services:
   brain-app:
-    build:
-      context: .
-      dockerfile: Dockerfile.prod
+    image: ${BRAIN_IMAGE:-ghcr.io/orinocostudios/pinky:latest}
     restart: always
     environment:
       - PORT=${PORT:-8081}
