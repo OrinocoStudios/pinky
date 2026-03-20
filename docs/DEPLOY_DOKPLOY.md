@@ -30,8 +30,18 @@ Ollama se separa para poder moverlo a un servidor con GPU en el futuro sin cambi
 3. Conectar el repositorio Git y seleccionar la rama `main`.
 4. En **Compose Path**, escribir: `docker-compose.ollama.yml`
 5. Click en **Save** y luego **Deploy**.
+6. Una vez desplegado, abrir la terminal del contenedor `ollama` desde Dokploy y ejecutar:
 
-El servicio `ollama-setup` descargará automáticamente los modelos `nomic-embed-text` y `llama3.2` una vez que Ollama esté healthy. Se puede personalizar con las variables `OLLAMA_EMBEDDING_MODEL` y `OLLAMA_LLM_MODEL`.
+```bash
+ollama pull nomic-embed-text
+ollama pull llama3.2
+```
+
+7. Verificar que los modelos estén listos:
+
+```bash
+ollama list
+```
 
 > **Nota**: La descarga de modelos puede tomar varios minutos (~2.3GB total). Solo es necesario hacerlo una vez — los modelos persisten en el volumen `ollama-models`.
 

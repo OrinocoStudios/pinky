@@ -45,9 +45,10 @@ export class MongoDocumentRepository implements DocumentRepositoryPort {
     await this.db.chunksCollection.insertMany(chunks);
   }
 
-  async listAllChunks(limit = 10000): Promise<DocumentChunk[]> {
+  async listAllChunks(limit = 10000, tenantId?: string): Promise<DocumentChunk[]> {
+    const filter = tenantId ? { tenantId } : {};
     return (await this.db.chunksCollection
-      .find({})
+      .find(filter)
       .limit(limit)
       .toArray()) as unknown as DocumentChunk[];
   }
@@ -55,9 +56,12 @@ export class MongoDocumentRepository implements DocumentRepositoryPort {
   async listChunksNeedingReindex(
     currentEmbeddingModel: string,
     limit = 10000,
+    tenantId?: string,
   ): Promise<DocumentChunk[]> {
+    const tenantFilter = tenantId ? { tenantId } : {};
     return (await this.db.chunksCollection
       .find({
+        ...tenantFilter,
         $or: [
           { embeddingModel: { $exists: false } },
           { embeddingModel: null },
@@ -87,19 +91,33 @@ export class MongoDocumentRepository implements DocumentRepositoryPort {
       .toArray()) as unknown as DocumentRecord[];
   }
 
+  async listDocumentsByTenant(tenantId: string, limit = 50): Promise<DocumentRecord[]> {
+    return (await this.db.documentsCollection
+      .find({ tenantId })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .toArray()) as unknown as DocumentRecord[];
+  }
+
   async findDocumentById(documentId: string): Promise<DocumentRecord | null> {
     return (await this.db.documentsCollection.findOne({ documentId })) as DocumentRecord | null;
   }
 
-  async findDocumentByChecksum(checksum: string): Promise<DocumentRecord | null> {
-    return (await this.db.documentsCollection.findOne({ checksum })) as DocumentRecord | null;
+  async findDocumentByChecksum(checksum: string, tenantId?: string): Promise<DocumentRecord | null> {
+    const filter = tenantId ? { checksum, tenantId } : { checksum };
+    return (await this.db.documentsCollection.findOne(filter)) as DocumentRecord | null;
   }
 
-  async enqueueGraphSyncEvent(documentId: string, graph: ExtractedGraph): Promise<GraphSyncOutboxEvent> {
+  async enqueueGraphSyncEvent(
+    documentId: string,
+    graph: ExtractedGraph,
+    tenantId?: string,
+  ): Promise<GraphSyncOutboxEvent> {
     const now = new Date().toISOString();
     const event: GraphSyncOutboxEvent = {
       eventId: randomUUID(),
       documentId,
+      tenantId,
       payload: JSON.stringify(graph),
       status: 'PENDING',
       attempts: 0,
@@ -110,12 +128,14 @@ export class MongoDocumentRepository implements DocumentRepositoryPort {
     return event;
   }
 
-  async claimAndGetNextRetryableEvent(): Promise<GraphSyncOutboxEvent | null> {
+  async claimAndGetNextRetryableEvent(tenantId?: string): Promise<GraphSyncOutboxEvent | null> {
     const now = new Date();
     const nowIso = now.toISOString();
     const lockExpiresAt = new Date(now.getTime() + 2 * 60 * 1000).toISOString();
+    const tenantFilter = tenantId ? { tenantId } : {};
     const result = await this.db.graphSyncOutboxCollection.findOneAndUpdate(
       {
+        ...tenantFilter,
         status: { $in: ['PENDING', 'FAILED'] },
         attempts: { $lt: 10 },
         $or: [

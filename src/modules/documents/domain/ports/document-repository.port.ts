@@ -9,14 +9,23 @@ export interface DocumentRepositoryPort {
     graphSyncStatus?: DocumentRecord['graphSyncStatus'],
   ): Promise<void>;
   addChunks(chunks: DocumentChunk[]): Promise<void>;
-  listAllChunks(limit?: number): Promise<DocumentChunk[]>;
-  listChunksNeedingReindex(currentEmbeddingModel: string, limit?: number): Promise<DocumentChunk[]>;
+  listAllChunks(limit?: number, tenantId?: string): Promise<DocumentChunk[]>;
+  listChunksNeedingReindex(
+    currentEmbeddingModel: string,
+    limit?: number,
+    tenantId?: string,
+  ): Promise<DocumentChunk[]>;
   updateChunkEmbedding(chunkId: string, embedding: number[], embeddingModel: string): Promise<void>;
   listDocuments(limit?: number): Promise<DocumentRecord[]>;
+  listDocumentsByTenant(tenantId: string, limit?: number): Promise<DocumentRecord[]>;
   findDocumentById(documentId: string): Promise<DocumentRecord | null>;
-  findDocumentByChecksum(checksum: string): Promise<DocumentRecord | null>;
-  enqueueGraphSyncEvent(documentId: string, graph: ExtractedGraph): Promise<GraphSyncOutboxEvent>;
-  claimAndGetNextRetryableEvent(): Promise<GraphSyncOutboxEvent | null>;
+  findDocumentByChecksum(checksum: string, tenantId?: string): Promise<DocumentRecord | null>;
+  enqueueGraphSyncEvent(
+    documentId: string,
+    graph: ExtractedGraph,
+    tenantId?: string,
+  ): Promise<GraphSyncOutboxEvent>;
+  claimAndGetNextRetryableEvent(tenantId?: string): Promise<GraphSyncOutboxEvent | null>;
   markGraphSyncEvent(
     eventId: string,
     status: GraphSyncOutboxEvent['status'],

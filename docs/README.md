@@ -15,6 +15,7 @@ Esta carpeta (`memory_architecture/brain_service/docs`) es la fuente oficial de 
 ## Plan operativo
 
 - [Execution Plan](EXECUTION_PLAN.md)
+- [Guía de integración rápida](INTEGRATION_GUIDE.md)
 
 ## ADRs actuales
 
@@ -25,6 +26,7 @@ Esta carpeta (`memory_architecture/brain_service/docs`) es la fuente oficial de 
 - [ADR-0005 - Ollama para embeddings y extracción estructurada](ADR/ADR-0005-ollama-embeddings-extraction.md)
 - [ADR-0006 - Administración de corpus por API](ADR/ADR-0006-corpus-administration-api.md)
 - [ADR-0007 - Hardening operacional (seguridad, confiabilidad e idempotencia)](ADR/ADR-0007-operational-hardening-security-reliability.md)
+- [ADR-0008 - Aislamiento multi-tenant por corpus](ADR/ADR-0008-multi-tenant-corpus-isolation.md)
 
 ## Convención de actualización
 

@@ -77,12 +77,19 @@ export class InMemoryDocumentRepository implements DocumentRepositoryPort {
     this.chunks.push(...chunks);
   }
 
-  async listAllChunks(limit = 10000): Promise<DocumentChunk[]> {
-    return this.chunks.slice(0, limit);
+  async listAllChunks(limit = 10000, tenantId?: string): Promise<DocumentChunk[]> {
+    const chunks = tenantId ? this.chunks.filter((c) => c.tenantId === tenantId) : this.chunks;
+    return chunks.slice(0, limit);
   }
 
-  async listChunksNeedingReindex(currentModel: string, limit = 10000): Promise<DocumentChunk[]> {
-    return this.chunks.filter((c) => c.embeddingModel !== currentModel).slice(0, limit);
+  async listChunksNeedingReindex(
+    currentModel: string,
+    limit = 10000,
+    tenantId?: string,
+  ): Promise<DocumentChunk[]> {
+    return this.chunks
+      .filter((c) => c.embeddingModel !== currentModel && (!tenantId || c.tenantId === tenantId))
+      .slice(0, limit);
   }
 
   async updateChunkEmbedding(chunkId: string, embedding: number[], embeddingModel: string): Promise<void> {
@@ -97,18 +104,33 @@ export class InMemoryDocumentRepository implements DocumentRepositoryPort {
     return [...this.documents].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
   }
 
+  async listDocumentsByTenant(tenantId: string, limit = 50): Promise<DocumentRecord[]> {
+    return this.documents
+      .filter((d) => d.tenantId === tenantId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
+  }
+
   async findDocumentById(documentId: string): Promise<DocumentRecord | null> {
     return this.documents.find((d) => d.documentId === documentId) ?? null;
   }
 
-  async findDocumentByChecksum(checksum: string): Promise<DocumentRecord | null> {
-    return this.documents.find((d) => d.checksum === checksum) ?? null;
+  async findDocumentByChecksum(checksum: string, tenantId?: string): Promise<DocumentRecord | null> {
+    return (
+      this.documents.find((d) => d.checksum === checksum && (tenantId ? d.tenantId === tenantId : true)) ??
+      null
+    );
   }
 
-  async enqueueGraphSyncEvent(documentId: string, graph: ExtractedGraph): Promise<GraphSyncOutboxEvent> {
+  async enqueueGraphSyncEvent(
+    documentId: string,
+    graph: ExtractedGraph,
+    tenantId?: string,
+  ): Promise<GraphSyncOutboxEvent> {
     const event: GraphSyncOutboxEvent = {
       eventId: `evt-${Date.now()}`,
       documentId,
+      tenantId,
       payload: JSON.stringify(graph),
       status: 'PENDING',
       attempts: 0,
@@ -119,8 +141,10 @@ export class InMemoryDocumentRepository implements DocumentRepositoryPort {
     return event;
   }
 
-  async claimAndGetNextRetryableEvent(): Promise<GraphSyncOutboxEvent | null> {
-    const event = this.outboxEvents.find((e) => e.status === 'PENDING' || e.status === 'FAILED');
+  async claimAndGetNextRetryableEvent(tenantId?: string): Promise<GraphSyncOutboxEvent | null> {
+    const event = this.outboxEvents.find(
+      (e) => (e.status === 'PENDING' || e.status === 'FAILED') && (!tenantId || e.tenantId === tenantId),
+    );
     if (event) {
       event.status = 'PROCESSING';
       event.attempts += 1;
@@ -156,14 +180,14 @@ export class InMemoryDocumentRepository implements DocumentRepositoryPort {
 // ── Mock GraphStore ────────────────────────────────────────────
 export class MockGraphStore implements GraphStorePort {
   async ping(): Promise<void> {}
-  async upsertGraph(_graph: ExtractedGraph): Promise<void> {}
-  async findEntitiesByNames(_names: string[]) {
+  async upsertGraph(_graph: ExtractedGraph, _tenantId?: string): Promise<void> {}
+  async findEntitiesByNames(_names: string[], _tenantId?: string) {
     return [];
   }
-  async findRelationshipsForEntityIds(_ids: string[]) {
+  async findRelationshipsForEntityIds(_ids: string[], _tenantId?: string) {
     return [];
   }
-  async deleteByDocumentId(_id: string): Promise<void> {}
+  async deleteByDocumentId(_id: string, _tenantId?: string): Promise<void> {}
 }
 
 // ── Mock EmbeddingPort ─────────────────────────────────────────
@@ -202,8 +226,11 @@ export class MockAnswerGenerator implements AnswerGeneratorPort {
 export class MockChunkSearch implements ChunkSearchPort {
   constructor(private readonly repo: InMemoryDocumentRepository) {}
 
-  async hybridSearch(query: { queryText: string; topK: number }): Promise<DocumentChunk[]> {
-    return this.repo.chunks.slice(0, query.topK);
+  async hybridSearch(query: { queryText: string; topK: number; tenantId?: string }): Promise<DocumentChunk[]> {
+    const filtered = query.tenantId
+      ? this.repo.chunks.filter((chunk) => chunk.tenantId === query.tenantId)
+      : this.repo.chunks;
+    return filtered.slice(0, query.topK);
   }
 }
 
@@ -231,7 +258,9 @@ export class MockMongoDatabaseService {
 }
 
 // ── Test Module Factory ────────────────────────────────────────
-export async function createTestApp(): Promise<{
+export async function createTestApp(overrides?: {
+  app?: { enableMultiTenant?: boolean };
+}): Promise<{
   app: INestApplication;
   repo: InMemoryDocumentRepository;
   graphStore: MockGraphStore;
@@ -251,6 +280,9 @@ export async function createTestApp(): Promise<{
               port: 8081,
               apiKey: 'test-api-key',
               enableApiKeyAuth: false,
+              enableMultiTenant: overrides?.app?.enableMultiTenant ?? false,
+              corsEnabled: false,
+              corsOrigins: [],
               searchEngine: 'mongo',
               objectStorePath: './data/objects',
               topK: 8,

@@ -25,10 +25,16 @@ export class MongoDatabaseService implements OnModuleInit, OnModuleDestroy {
     const db = this.getDb();
 
     await db.collection('documents').createIndex({ documentId: 1 }, { unique: true });
-    await db.collection('documents').createIndex({ checksum: 1 }, { sparse: true, unique: true });
+    await db.collection('documents').createIndex({ checksum: 1 }, { sparse: true });
+    await db.collection('documents').createIndex(
+      { tenantId: 1, checksum: 1 },
+      { sparse: true, unique: true },
+    );
+    await db.collection('documents').createIndex({ tenantId: 1, createdAt: -1 });
 
     await db.collection('chunks').createIndex({ chunkId: 1 }, { unique: true });
     await db.collection('chunks').createIndex({ documentId: 1 });
+    await db.collection('chunks').createIndex({ tenantId: 1, documentId: 1 });
 
     await db.collection('graph_sync_outbox').createIndex(
       { status: 1, attempts: 1, updatedAt: 1 },

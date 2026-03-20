@@ -16,8 +16,9 @@ export class MongoChunkSearchAdapter implements ChunkSearchPort {
   async hybridSearch(query: ChunkSearchQuery): Promise<DocumentChunk[]> {
     const queryVector = await this.embeddingPort.embed(query.queryText);
     const queryDim = queryVector.length;
+    const filter = query.tenantId ? { tenantId: query.tenantId } : {};
     const candidateChunks = (await this.db.chunksCollection
-      .find({})
+      .find(filter)
       .limit(Math.max(query.topK * 8, 200))
       .toArray()) as unknown as DocumentChunk[];
 

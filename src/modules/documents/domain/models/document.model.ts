@@ -27,6 +27,7 @@ export type DocumentSource =
 
 export interface DocumentRecord {
   documentId: string;
+  tenantId?: string;
   title?: string;
   source: DocumentSource;
   checksum?: string;
@@ -43,6 +44,7 @@ export interface DocumentRecord {
 export interface DocumentChunk {
   chunkId: string;
   documentId: string;
+  tenantId?: string;
   seq: number;
   text: string;
   embedding?: number[];
@@ -58,6 +60,7 @@ export type OutboxEventStatus = 'PENDING' | 'PROCESSING' | 'FAILED' | 'SYNCED' |
 export interface GraphSyncOutboxEvent {
   eventId: string;
   documentId: string;
+  tenantId?: string;
   payload: string; // JSON-serialized ExtractedGraph
   status: OutboxEventStatus;
   attempts: number;

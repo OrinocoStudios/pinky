@@ -5,6 +5,7 @@ import { DocumentRecord } from '../domain/models/document.model';
 import { IngestDocumentUseCase } from '../../ingestion/application/ingest-document.usecase';
 
 export type GenerateDocumentInput = {
+  tenantId?: string;
   useCaseId: string;
   title?: string;
   params?: Record<string, unknown>;
@@ -21,6 +22,7 @@ export class GenerateDocumentUseCase {
   async execute(input: GenerateDocumentInput): Promise<DocumentRecord> {
     const rawText = await this.documentGenerator.generate(input.useCaseId, input.params);
     return this.ingestDocumentUseCase.execute({
+      tenantId: input.tenantId,
       title: input.title ?? `Generated: ${input.useCaseId}`,
       rawText,
       source: { kind: 'generated', useCaseId: input.useCaseId },

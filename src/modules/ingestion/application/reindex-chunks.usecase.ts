@@ -6,6 +6,7 @@ import { EmbeddingPort } from '../domain/ports/embedding.port';
 export type ReindexChunksInput = {
   limit?: number;
   mode?: 'rebuild' | 'incremental';
+  tenantId?: string;
 };
 
 export type ReindexChunksOutput = {
@@ -29,8 +30,8 @@ export class ReindexChunksUseCase {
     const embeddingModel = this.embeddingPort.getModelId();
     const chunks =
       mode === 'incremental'
-        ? await this.documentRepository.listChunksNeedingReindex(embeddingModel, limit)
-        : await this.documentRepository.listAllChunks(limit);
+        ? await this.documentRepository.listChunksNeedingReindex(embeddingModel, limit, input.tenantId)
+        : await this.documentRepository.listAllChunks(limit, input.tenantId);
     let processed = 0;
     let failed = 0;
 

@@ -5,6 +5,17 @@ export type AppConfig = {
   instanceId?: string;
   apiKey: string;
   enableApiKeyAuth: boolean;
+  enableMultiTenant: boolean;
+  /**
+   * CORS policy for browser consumers.
+   * Disabled by default for safer server-to-server integration.
+   */
+  corsEnabled: boolean;
+  /**
+   * Comma-separated allowlist origins (e.g. "https://app.example.com,http://localhost:3000").
+   * If empty and CORS is enabled, the server will echo/allow origins dynamically.
+   */
+  corsOrigins: string[];
   searchEngine: 'mongo' | 'elasticsearch';
   objectStorePath: string;
   topK: number;
@@ -76,6 +87,12 @@ export default (): BrainConfig => ({
     instanceId: process.env.APP_INSTANCE_ID,
     apiKey: process.env.API_KEY ?? '',
     enableApiKeyAuth: process.env.ENABLE_API_KEY_AUTH === 'true',
+    enableMultiTenant: process.env.ENABLE_MULTI_TENANT === 'true',
+    corsEnabled: process.env.CORS_ENABLED === 'true',
+    corsOrigins: (process.env.CORS_ORIGINS ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
     searchEngine: (process.env.SEARCH_ENGINE ?? 'mongo') as 'mongo' | 'elasticsearch',
     objectStorePath: process.env.OBJECT_STORE_PATH ?? './data/objects',
     topK: Number(process.env.TOP_K ?? 8),

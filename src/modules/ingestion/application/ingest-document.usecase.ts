@@ -19,6 +19,7 @@ import { ChecksumService } from '../../../common/utils/checksum.service';
 import { BrainConfig } from '../../../config/configuration';
 
 export type IngestDocumentInput = {
+  tenantId?: string;
   title?: string;
   rawText: string;
   source: DocumentRecord['source'];
@@ -49,7 +50,7 @@ export class IngestDocumentUseCase {
     const checksum = this.checksumService.calculate(input.rawText);
     const enableChecksum = this.configService.get('app.enableChecksumValidation', { infer: true });
     if (enableChecksum) {
-      const existing = await this.documentRepository.findDocumentByChecksum(checksum);
+      const existing = await this.documentRepository.findDocumentByChecksum(checksum, input.tenantId);
       if (existing) {
         this.logger.log(`Document already exists (checksum match): ${existing.documentId}`);
         return existing;
@@ -68,6 +69,7 @@ export class IngestDocumentUseCase {
     try {
       created = await this.documentRepository.createDocument({
         documentId,
+        tenantId: input.tenantId,
         title: input.title,
         rawText: input.rawText,
         source: input.source,
@@ -78,7 +80,7 @@ export class IngestDocumentUseCase {
       });
     } catch (error) {
       if (enableChecksum && this.isDuplicateChecksumError(error)) {
-        const existing = await this.documentRepository.findDocumentByChecksum(checksum);
+        const existing = await this.documentRepository.findDocumentByChecksum(checksum, input.tenantId);
         if (existing) {
           this.logger.log(
             `Document already exists after concurrent insert attempt (checksum match): ${existing.documentId}`,
@@ -94,6 +96,7 @@ export class IngestDocumentUseCase {
       const chunksWithEmbeddings = await Promise.all(
         chunks.map(async (chunk) => ({
           ...chunk,
+          tenantId: input.tenantId,
           embedding: await this.embeddingPort.embed(chunk.text),
           embeddingModel,
         })),
@@ -103,8 +106,12 @@ export class IngestDocumentUseCase {
 
       const chunkInputs = chunks.map((c) => ({ chunkId: c.chunkId, text: c.text }));
       const extractedGraph = await this.graphExtractor.extract(documentId, chunkInputs);
-      const syncEvent = await this.documentRepository.enqueueGraphSyncEvent(documentId, extractedGraph);
-      await this.graphStore.upsertGraph(extractedGraph);
+      const syncEvent = await this.documentRepository.enqueueGraphSyncEvent(
+        documentId,
+        extractedGraph,
+        input.tenantId,
+      );
+      await this.graphStore.upsertGraph(extractedGraph, input.tenantId);
       await this.documentRepository.updateDocumentStatus(documentId, 'READY', 'SYNCED');
       await this.documentRepository.markGraphSyncEvent(syncEvent.eventId, 'SYNCED', {
         attempts: 1,

@@ -9,6 +9,7 @@ import { PromptTemplateService } from './prompt-template.service';
 import { StructuredLogger } from '../../../common/logger/structured-logger.service';
 
 export type GraphRagQueryInput = {
+  tenantId?: string;
   query: string;
   entityHints?: string[];
   topK: number;
@@ -50,6 +51,7 @@ export class GraphRagQueryUseCase {
     try {
       // Step 1: Retrieve chunks from search engine
       const chunks = await this.chunkSearch.hybridSearch({
+        tenantId: input.tenantId,
         queryText: input.query,
         topK: input.topK,
       });
@@ -62,9 +64,10 @@ export class GraphRagQueryUseCase {
       const entityHints = input.entityHints?.length
         ? input.entityHints
         : this.extractEntityHintsFromQuery(input.query);
-      const entities = await this.graphStore.findEntitiesByNames(entityHints);
+      const entities = await this.graphStore.findEntitiesByNames(entityHints, input.tenantId);
       const relations = await this.graphStore.findRelationshipsForEntityIds(
         entities.map((e) => e.entityId),
+        input.tenantId,
       );
 
       this.logger.debug('Retrieved graph context for query', GraphRagQueryUseCase.name, {

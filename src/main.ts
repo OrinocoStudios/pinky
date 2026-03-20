@@ -12,6 +12,17 @@ async function bootstrap() {
   const configService = app.get(ConfigService<BrainConfig>);
   app.useLogger(app.get(StructuredLogger));
 
+  const corsEnabled = configService.get('app.corsEnabled', { infer: true }) ?? false;
+  const corsOrigins = configService.get('app.corsOrigins', { infer: true }) ?? [];
+  if (corsEnabled) {
+    app.enableCors({
+      origin: corsOrigins.length > 0 ? corsOrigins : true,
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'X-API-Key'],
+      credentials: false,
+    });
+  }
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

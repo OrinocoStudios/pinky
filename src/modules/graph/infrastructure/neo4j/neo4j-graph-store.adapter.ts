@@ -30,7 +30,7 @@ export class Neo4jGraphStoreAdapter implements GraphStorePort, OnModuleDestroy {
     }
   }
 
-  async upsertGraph(graph: ExtractedGraph): Promise<void> {
+  async upsertGraph(graph: ExtractedGraph, tenantId?: string): Promise<void> {
     const session = this.createSession();
     try {
       const now = new Date().toISOString();
@@ -38,9 +38,10 @@ export class Neo4jGraphStoreAdapter implements GraphStorePort, OnModuleDestroy {
         await session.run(
           `
           MERGE (d:Document {documentId: $documentId})
-          SET d.updatedAt = $updatedAt
+          SET d.updatedAt = $updatedAt,
+              d.tenantId = $tenantId
           `,
-          { documentId: graph.sourceDocumentId, updatedAt: now },
+          { documentId: graph.sourceDocumentId, updatedAt: now, tenantId: tenantId ?? null },
         );
       }
 
@@ -51,7 +52,8 @@ export class Neo4jGraphStoreAdapter implements GraphStorePort, OnModuleDestroy {
           SET e.name = $name,
               e.type = $type,
               e.normalized = $normalized,
-              e.updatedAt = $updatedAt
+              e.updatedAt = $updatedAt,
+              e.tenantId = $tenantId
           `,
           {
             entityId: entity.entityId,
@@ -59,6 +61,7 @@ export class Neo4jGraphStoreAdapter implements GraphStorePort, OnModuleDestroy {
             type: entity.type,
             normalized: entity.normalized ?? entity.name.toLowerCase(),
             updatedAt: now,
+            tenantId: tenantId ?? null,
           },
         );
 
@@ -67,9 +70,10 @@ export class Neo4jGraphStoreAdapter implements GraphStorePort, OnModuleDestroy {
             `
             MATCH (d:Document {documentId: $documentId})
             MATCH (e:Entity {entityId: $entityId})
-            MERGE (d)-[:MENTIONS]->(e)
+            MERGE (d)-[m:MENTIONS]->(e)
+            SET m.tenantId = $tenantId
             `,
-            { documentId: graph.sourceDocumentId, entityId: entity.entityId },
+            { documentId: graph.sourceDocumentId, entityId: entity.entityId, tenantId: tenantId ?? null },
           );
         }
       }
@@ -81,7 +85,8 @@ export class Neo4jGraphStoreAdapter implements GraphStorePort, OnModuleDestroy {
           MATCH (b:Entity {entityId: $toEntityId})
           MERGE (a)-[r:RELATED {type: $type, sourceChunkId: $sourceChunkId}]->(b)
           SET r.confidence = $confidence,
-              r.updatedAt = $updatedAt
+              r.updatedAt = $updatedAt,
+              r.tenantId = $tenantId
           `,
           {
             fromEntityId: relation.fromEntityId,
@@ -90,6 +95,7 @@ export class Neo4jGraphStoreAdapter implements GraphStorePort, OnModuleDestroy {
             sourceChunkId: relation.sourceChunkId,
             confidence: relation.confidence,
             updatedAt: now,
+            tenantId: tenantId ?? null,
           },
         );
       }
@@ -98,7 +104,7 @@ export class Neo4jGraphStoreAdapter implements GraphStorePort, OnModuleDestroy {
     }
   }
 
-  async findEntitiesByNames(names: string[]): Promise<GraphEntity[]> {
+  async findEntitiesByNames(names: string[], tenantId?: string): Promise<GraphEntity[]> {
     if (names.length === 0) {
       return [];
     }
@@ -109,10 +115,11 @@ export class Neo4jGraphStoreAdapter implements GraphStorePort, OnModuleDestroy {
         `
         MATCH (e:Entity)
         WHERE toLower(e.name) IN $names
+          AND ($tenantId IS NULL OR e.tenantId = $tenantId)
         RETURN e.entityId AS entityId, e.type AS type, e.name AS name, e.normalized AS normalized
         LIMIT 50
         `,
-        { names: names.map((name) => name.toLowerCase()) },
+        { names: names.map((name) => name.toLowerCase()), tenantId: tenantId ?? null },
       );
 
       return result.records.map((record) => ({
@@ -126,7 +133,7 @@ export class Neo4jGraphStoreAdapter implements GraphStorePort, OnModuleDestroy {
     }
   }
 
-  async findRelationshipsForEntityIds(entityIds: string[]): Promise<GraphRelationship[]> {
+  async findRelationshipsForEntityIds(entityIds: string[], tenantId?: string): Promise<GraphRelationship[]> {
     if (entityIds.length === 0) {
       return [];
     }
@@ -137,6 +144,7 @@ export class Neo4jGraphStoreAdapter implements GraphStorePort, OnModuleDestroy {
         `
         MATCH (a:Entity)-[r:RELATED]->(b:Entity)
         WHERE a.entityId IN $entityIds OR b.entityId IN $entityIds
+          AND ($tenantId IS NULL OR r.tenantId = $tenantId)
         RETURN a.entityId AS fromEntityId,
                b.entityId AS toEntityId,
                r.type AS type,
@@ -144,7 +152,7 @@ export class Neo4jGraphStoreAdapter implements GraphStorePort, OnModuleDestroy {
                r.confidence AS confidence
         LIMIT 100
         `,
-        { entityIds },
+        { entityIds, tenantId: tenantId ?? null },
       );
 
       return result.records.map((record) => ({
@@ -159,32 +167,36 @@ export class Neo4jGraphStoreAdapter implements GraphStorePort, OnModuleDestroy {
     }
   }
 
-  async deleteByDocumentId(documentId: string): Promise<void> {
+  async deleteByDocumentId(documentId: string, tenantId?: string): Promise<void> {
     const session = this.createSession();
     try {
+      const tenantFilter = tenantId ? ' AND d.tenantId = $tenantId' : '';
       // Use Document->Entity MENTIONS relationship for reliable deletion
       // instead of string matching on entityId
       await session.run(
         `
         MATCH (d:Document {documentId: $documentId})-[:MENTIONS]->(e:Entity)
+        WHERE 1=1${tenantFilter}
         MATCH (e)-[r:RELATED]-(other)
         DELETE r
         `,
-        { documentId },
+        { documentId, tenantId: tenantId ?? null },
       );
       await session.run(
         `
         MATCH (d:Document {documentId: $documentId})-[:MENTIONS]->(e:Entity)
+        WHERE 1=1${tenantFilter}
         DETACH DELETE e
         `,
-        { documentId },
+        { documentId, tenantId: tenantId ?? null },
       );
       await session.run(
         `
         MATCH (d:Document {documentId: $documentId})
+        WHERE 1=1${tenantFilter}
         DETACH DELETE d
         `,
-        { documentId },
+        { documentId, tenantId: tenantId ?? null },
       );
     } finally {
       await session.close();

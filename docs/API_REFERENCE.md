@@ -16,6 +16,25 @@ X-API-Key: <your-api-key>
 
 Endpoints that require authentication are marked with 🔐 below. Read-only endpoints (`GET /health`, `GET /documents`, `GET /metrics`) do NOT require authentication.
 
+## Multi-tenant Header
+
+When `ENABLE_MULTI_TENANT=true`, endpoints that read/write corpus data require:
+
+```
+X-Tenant-Id: <tenant-id>
+```
+
+This applies to:
+- `POST /documents/text`
+- `POST /documents/upload`
+- `POST /documents/generate`
+- `DELETE /documents/:id`
+- `POST /query`
+- `POST /index/rebuild`
+- `POST /index/incremental`
+- `POST /outbox/retry`
+- `GET /documents`
+
 ---
 
 ## Endpoints

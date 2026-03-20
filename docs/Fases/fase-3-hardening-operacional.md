@@ -3,7 +3,7 @@
 **Proyecto**: Brain Service  
 **Fecha**: 2026-02-24  
 **Fase**: 3 de 5  
-**Estado**: Planificado
+**Estado**: Completado
 
 ---
 
@@ -19,9 +19,9 @@ Preparar el Brain Service para ejecución sostenida en producción por dominio, 
 
 ### Completado en Fases Anteriores
 
-**Fase 1** (Pendiente):
-- Embeddings y extracción de entidades aún en modo determinístico/naive
-- Búsqueda híbrida en MongoDB básica
+**Fase 1** (✅ Completada):
+- Embeddings y extracción de entidades con proveedores reales (Ollama por defecto).
+- Búsqueda híbrida en MongoDB con scoring vector+texto.
 
 **Fase 2** (✅ Completada):
 - Proveedores LLM reales (OpenAI, Anthropic, Local)
@@ -29,14 +29,11 @@ Preparar el Brain Service para ejecución sostenida en producción por dominio, 
 - Prompts estructurados con control de alucinaciones
 - Metadata de respuesta (modelo, tokens, fuentes citadas)
 
-### Limitaciones Actuales
+### Mejoras y decisiones residuales
 
-⚠️ **Sin autenticación**: Cualquiera puede acceder a todos los endpoints  
-⚠️ **Sin límites de carga**: Vulnerable a abuso (upload masivo, DoS)  
-⚠️ **Sin rate limiting**: Consumo descontrolado de APIs LLM  
-⚠️ **Logs básicos**: Dificultad para debugging en producción  
-⚠️ **Sin métricas**: No hay visibilidad de performance/uso  
-⚠️ **Sin idempotencia**: Documentos duplicados si se reintentan requests
+- CORS no está habilitado por defecto (necesario solo si hay consumidores web directos).
+- `LLM_PROVIDER=local` es útil para desarrollo/debug, pero no es la opción recomendada en producción.
+- Aislamiento multi-proyecto en un solo deployment requiere diseño multi-tenant (hoy se recomienda “una instancia por dominio/proyecto”).
 
 ## Componentes a Implementar
 

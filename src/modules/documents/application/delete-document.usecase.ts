@@ -12,13 +12,17 @@ export class DeleteDocumentUseCase {
     private readonly graphStore: GraphStorePort,
   ) {}
 
-  async execute(documentId: string): Promise<void> {
+  async execute(documentId: string, tenantId?: string): Promise<void> {
     const doc = await this.documentRepository.findDocumentById(documentId);
     if (!doc) {
       throw new NotFoundException(`Document ${documentId} not found`);
     }
+    if (tenantId && doc.tenantId !== tenantId) {
+      // Return 404 to avoid disclosing document existence across tenants.
+      throw new NotFoundException(`Document ${documentId} not found`);
+    }
 
-    await this.graphStore.deleteByDocumentId(documentId);
+    await this.graphStore.deleteByDocumentId(documentId, tenantId);
     await this.documentRepository.deleteDocument(documentId);
   }
 }

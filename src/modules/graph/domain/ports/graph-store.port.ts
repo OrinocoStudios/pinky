@@ -2,8 +2,8 @@ import { ExtractedGraph, GraphEntity, GraphRelationship } from '../models/graph.
 
 export interface GraphStorePort {
   ping(): Promise<void>;
-  upsertGraph(graph: ExtractedGraph): Promise<void>;
-  findEntitiesByNames(names: string[]): Promise<GraphEntity[]>;
-  findRelationshipsForEntityIds(entityIds: string[]): Promise<GraphRelationship[]>;
-  deleteByDocumentId(documentId: string): Promise<void>;
+  upsertGraph(graph: ExtractedGraph, tenantId?: string): Promise<void>;
+  findEntitiesByNames(names: string[], tenantId?: string): Promise<GraphEntity[]>;
+  findRelationshipsForEntityIds(entityIds: string[], tenantId?: string): Promise<GraphRelationship[]>;
+  deleteByDocumentId(documentId: string, tenantId?: string): Promise<void>;
 }

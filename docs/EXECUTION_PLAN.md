@@ -28,12 +28,11 @@ Este plan consolida y limpia el contexto del plan original `memoria_agnostica_co
 - Pipeline GraphRAG inicial (`fastContext` + `truthFacts` + prompt grounded).
 
 ### Pendiente clave
-
-- Sustituir embeddings determinísticos por proveedor real.
-- Sustituir extractor naive de entidades/relaciones por extractor LLM estructurado.
-- Sustituir generador local de respuesta por adapter LLM real.
-- Endurecimiento de seguridad/observabilidad y límites operativos.
-- Soporte completo de endpoints de administración de índice y generación de documentos por caso de uso.
+- Mejorar calidad del grounding (cobertura de extracción, entity hints desde la pregunta y evaluación por lotes).
+- Evitar el uso de `LLM_PROVIDER=local` en producción; asegurar providers reales con timeouts/retries y guardrails de salida.
+- Afinar DX de integración (documentación breve, CORS configurable y notas de despliegue por instancia).
+- Multi-corpus/multi-tenant en un solo deployment (hoy el patrón recomendado sigue siendo una instancia por dominio/proyecto).
+- Completar o retirar el adaptador Elasticsearch (actualmente actúa como stub).
 
 ## Roadmap por fases
 
@@ -44,16 +43,13 @@ Este plan consolida y limpia el contexto del plan original `memoria_agnostica_co
 Subir precisión de recuperación y grounding con componentes productivos.
 
 ### Tareas
-
-- Implementar puerto/adaptador de embeddings reales (ej. proveedor externo o modelo local robusto).
-- Reindexar `chunks.embedding` con vector real.
-- Implementar extractor LLM estructurado para entidades/relaciones con schema fijo.
-- Añadir versionado de modelos (`embedding_model`, `extraction_model`) en metadata.
+- Mejorar el extractor LLM estructurado (schema, validación y cobertura de entidades/relaciones).
+- Evaluar y ajustar retrieval/híbrido (parámetros `topK`, `CHUNK_SIZE`/`CHUNK_OVERLAP`, scoring y filtros cuando aplique).
+- Usar el versionado existente en metadata (`embedding_model`, `extraction_model`) para comparar resultados entre ingestas.
 
 ### Criterio de salida
-
-- Consulta `POST /query` usa embeddings reales en búsqueda.
-- Grafo contiene relaciones con mejor precisión y trazabilidad por `sourceChunkId`.
+- `POST /query` logra grounding consistente con citación `[CTX-X]`/`[FACT-X]`.
+- El grafo aporta entidades/relaciones trazables por `sourceChunkId` y la calidad se mantiene tras reindexaciones.
 
 ## Fase 2 - Respuesta LLM grounded
 
@@ -62,16 +58,14 @@ Subir precisión de recuperación y grounding con componentes productivos.
 Generar respuesta final con adapter LLM real y control de alucinaciones.
 
 ### Tareas
-
-- Implementar `AnswerGeneratorPort` con adapter real (OpenAI/Anthropic u otro).
-- Definir plantilla de prompt estricta (solo hechos/contexto recuperado).
-- Añadir política de citación de fuentes en respuesta.
-- Añadir timeout, retries y manejo de errores de proveedor LLM.
+- Asegurar que `AnswerGeneratorPort` use el provider real configurado (OpenAI/Anthropic o local solo para dev).
+- Mantener la plantilla estricta y calibrar guardrails (evitar conocimiento externo y forzar citación).
+- Afinar timeouts/retries/fallbacks por proveedor para reducir latencia y errores.
+- (Opcional) Streaming de respuesta (SSE) para UIs chat.
 
 ### Criterio de salida
-
-- `POST /query` responde con salida grounded usando adapter LLM real.
-- Respuesta incluye evidencia trazable de contexto y grafo.
+- `POST /query` responde con salida grounded usando el provider real configurado.
+- Respuesta incluye evidencia trazable de contexto y grafo con citación por bloque.
 
 ## Fase 3 - Hardening operacional
 
@@ -80,18 +74,19 @@ Generar respuesta final con adapter LLM real y control de alucinaciones.
 Preparar servicio para ejecución sostenida por dominio.
 
 ### Tareas
-
-- Implementar autenticación por API key para rutas sensibles.
-- Límites de carga (`upload size`, `mime allowlist`, rate limit básico).
+- Consolidar seguridad operacional:
+  - `ApiKeyGuard` en mutaciones sensibles,
+  - `@nestjs/throttler` por tier/endpoint,
+  - límites de upload y validación de MIME.
 - Observabilidad mínima:
   - logs estructurados,
-  - métricas de ingesta/reintentos/latencia de query.
-- Idempotencia en ingesta por checksum y control de duplicados.
+  - métricas Prometheus (ingesta, errores, latencia, outbox),
+  - indicadores de salud consistentes.
+- Idempotencia por checksum (ya implementada) y documentación del contrato de error/reintentos.
+- (Opcional) CORS configurable según despliegue.
 
 ### Criterio de salida
-
-- Servicio protegido por API key y políticas básicas de abuso.
-- Métricas y logs permiten diagnóstico de fallos en producción.
+- Servicio listo para producción con seguridad básica, límites y observabilidad accionable.
 
 ## Fase 4 - Administración de corpus e índice
 
