@@ -10,6 +10,7 @@ import { StructuredLogger } from '../../../common/logger/structured-logger.servi
 
 export type GraphRagQueryInput = {
   tenantId?: string;
+  libraryIds?: string[];
   query: string;
   entityHints?: string[];
   topK: number;
@@ -47,11 +48,13 @@ export class GraphRagQueryUseCase {
   async execute(input: GraphRagQueryInput): Promise<GraphRagQueryOutput> {
     const startTime = Date.now();
     this.queriesTotalCounter.inc();
+    const libraryIds = this.normalizeLibraryIds(input.libraryIds);
 
     try {
       // Step 1: Retrieve chunks from search engine
       const chunks = await this.chunkSearch.hybridSearch({
         tenantId: input.tenantId,
+        libraryIds,
         queryText: input.query,
         topK: input.topK,
       });
@@ -64,10 +67,11 @@ export class GraphRagQueryUseCase {
       const entityHints = input.entityHints?.length
         ? input.entityHints
         : this.extractEntityHintsFromQuery(input.query);
-      const entities = await this.graphStore.findEntitiesByNames(entityHints, input.tenantId);
+      const entities = await this.graphStore.findEntitiesByNames(entityHints, input.tenantId, libraryIds);
       const relations = await this.graphStore.findRelationshipsForEntityIds(
         entities.map((e) => e.entityId),
         input.tenantId,
+        libraryIds,
       );
 
       this.logger.debug('Retrieved graph context for query', GraphRagQueryUseCase.name, {
@@ -149,5 +153,10 @@ export class GraphRagQueryUseCase {
       .map((token) => token.trim())
       .filter((token) => token.length > 3);
     return [...new Set(cleaned)].slice(0, 8);
+  }
+
+  private normalizeLibraryIds(libraryIds?: string[]): string[] | undefined {
+    const normalized = [...new Set((libraryIds ?? []).map((libraryId) => libraryId.trim()).filter(Boolean))];
+    return normalized.length > 0 ? normalized : undefined;
   }
 }

@@ -8,6 +8,10 @@ export class QueryDto {
   @IsArray()
   @IsString({ each: true })
   entityHints?: string[];
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  libraryIds?: string[];
 
   @IsOptional()
   @IsInt()

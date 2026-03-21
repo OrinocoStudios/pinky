@@ -18,12 +18,18 @@ export class QueryController {
   @Post('query')
   @Throttle({ query: {} })
   @RequireApiKey()
-  async query(@Body() body: QueryDto, @Headers('x-tenant-id') tenantHeader?: string): Promise<QueryResponseDto> {
+  async query(
+    @Body() body: QueryDto,
+    @Headers('x-tenant-id') tenantHeader?: string,
+    @Headers('x-library-id') libraryHeader?: string,
+  ): Promise<QueryResponseDto> {
     const tenantId = this.resolveTenantId(tenantHeader);
+    const libraryIds = this.resolveLibraryIds(body.libraryIds, libraryHeader);
     this.logger.log(`Received query: "${body.query.substring(0, 100)}${body.query.length > 100 ? '...' : ''}"`);
 
     const result = await this.graphRagQueryUseCase.execute({
       tenantId,
+      libraryIds,
       query: body.query,
       entityHints: body.entityHints,
       topK: body.topK ?? 8,
@@ -51,5 +57,15 @@ export class QueryController {
       throw new BadRequestException('X-Tenant-Id header is required when ENABLE_MULTI_TENANT=true');
     }
     return tenantId;
+  }
+
+  private resolveLibraryIds(bodyLibraryIds?: string[], libraryHeader?: string): string[] | undefined {
+    const normalizedBodyLibraryIds = (bodyLibraryIds ?? []).map((libraryId) => libraryId.trim()).filter(Boolean);
+    if (normalizedBodyLibraryIds.length > 0) {
+      return [...new Set(normalizedBodyLibraryIds)];
+    }
+
+    const normalizedHeaderLibraryId = libraryHeader?.trim();
+    return normalizedHeaderLibraryId ? [normalizedHeaderLibraryId] : undefined;
   }
 }

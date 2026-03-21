@@ -28,6 +28,7 @@ export type DocumentSource =
 export interface DocumentRecord {
   documentId: string;
   tenantId?: string;
+  libraryId?: string;
   title?: string;
   source: DocumentSource;
   checksum?: string;
@@ -45,6 +46,7 @@ export interface DocumentChunk {
   chunkId: string;
   documentId: string;
   tenantId?: string;
+  libraryId?: string;
   seq: number;
   text: string;
   embedding?: number[];
@@ -61,6 +63,7 @@ export interface GraphSyncOutboxEvent {
   eventId: string;
   documentId: string;
   tenantId?: string;
+  libraryId?: string;
   payload: string; // JSON-serialized ExtractedGraph
   status: OutboxEventStatus;
   attempts: number;

@@ -6,6 +6,7 @@ import { IngestDocumentUseCase } from '../../ingestion/application/ingest-docume
 
 export type GenerateDocumentInput = {
   tenantId?: string;
+  libraryId?: string;
   useCaseId: string;
   title?: string;
   params?: Record<string, unknown>;
@@ -23,6 +24,7 @@ export class GenerateDocumentUseCase {
     const rawText = await this.documentGenerator.generate(input.useCaseId, input.params);
     return this.ingestDocumentUseCase.execute({
       tenantId: input.tenantId,
+      libraryId: input.libraryId,
       title: input.title ?? `Generated: ${input.useCaseId}`,
       rawText,
       source: { kind: 'generated', useCaseId: input.useCaseId },

@@ -45,8 +45,8 @@ export class MongoDocumentRepository implements DocumentRepositoryPort {
     await this.db.chunksCollection.insertMany(chunks);
   }
 
-  async listAllChunks(limit = 10000, tenantId?: string): Promise<DocumentChunk[]> {
-    const filter = tenantId ? { tenantId } : {};
+  async listAllChunks(limit = 10000, tenantId?: string, libraryId?: string): Promise<DocumentChunk[]> {
+    const filter = this.buildScopeFilter(tenantId, libraryId);
     return (await this.db.chunksCollection
       .find(filter)
       .limit(limit)
@@ -57,11 +57,12 @@ export class MongoDocumentRepository implements DocumentRepositoryPort {
     currentEmbeddingModel: string,
     limit = 10000,
     tenantId?: string,
+    libraryId?: string,
   ): Promise<DocumentChunk[]> {
-    const tenantFilter = tenantId ? { tenantId } : {};
+    const scopeFilter = this.buildScopeFilter(tenantId, libraryId);
     return (await this.db.chunksCollection
       .find({
-        ...tenantFilter,
+        ...scopeFilter,
         $or: [
           { embeddingModel: { $exists: false } },
           { embeddingModel: null },
@@ -83,17 +84,34 @@ export class MongoDocumentRepository implements DocumentRepositoryPort {
     );
   }
 
-  async listDocuments(limit = 50): Promise<DocumentRecord[]> {
+  async listDocuments(limit = 50, libraryId?: string): Promise<DocumentRecord[]> {
+    const filter = libraryId ? { libraryId } : {};
     return (await this.db.documentsCollection
-      .find({})
+      .find(filter)
       .sort({ createdAt: -1 })
       .limit(limit)
       .toArray()) as unknown as DocumentRecord[];
   }
 
-  async listDocumentsByTenant(tenantId: string, limit = 50): Promise<DocumentRecord[]> {
+  async listDocumentsByTenant(
+    tenantId: string,
+    limit = 50,
+    libraryId?: string,
+  ): Promise<DocumentRecord[]> {
     return (await this.db.documentsCollection
-      .find({ tenantId })
+      .find(this.buildScopeFilter(tenantId, libraryId))
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .toArray()) as unknown as DocumentRecord[];
+  }
+
+  async listDocumentsByLibrary(
+    libraryId: string,
+    tenantId?: string,
+    limit = 50,
+  ): Promise<DocumentRecord[]> {
+    return (await this.db.documentsCollection
+      .find(this.buildScopeFilter(tenantId, libraryId))
       .sort({ createdAt: -1 })
       .limit(limit)
       .toArray()) as unknown as DocumentRecord[];
@@ -103,8 +121,15 @@ export class MongoDocumentRepository implements DocumentRepositoryPort {
     return (await this.db.documentsCollection.findOne({ documentId })) as DocumentRecord | null;
   }
 
-  async findDocumentByChecksum(checksum: string, tenantId?: string): Promise<DocumentRecord | null> {
-    const filter = tenantId ? { checksum, tenantId } : { checksum };
+  async findDocumentByChecksum(
+    checksum: string,
+    tenantId?: string,
+    libraryId?: string,
+  ): Promise<DocumentRecord | null> {
+    const filter = {
+      checksum,
+      ...this.buildScopeFilter(tenantId, libraryId),
+    };
     return (await this.db.documentsCollection.findOne(filter)) as DocumentRecord | null;
   }
 
@@ -112,12 +137,14 @@ export class MongoDocumentRepository implements DocumentRepositoryPort {
     documentId: string,
     graph: ExtractedGraph,
     tenantId?: string,
+    libraryId?: string,
   ): Promise<GraphSyncOutboxEvent> {
     const now = new Date().toISOString();
     const event: GraphSyncOutboxEvent = {
       eventId: randomUUID(),
       documentId,
       tenantId,
+      libraryId,
       payload: JSON.stringify(graph),
       status: 'PENDING',
       attempts: 0,
@@ -128,14 +155,17 @@ export class MongoDocumentRepository implements DocumentRepositoryPort {
     return event;
   }
 
-  async claimAndGetNextRetryableEvent(tenantId?: string): Promise<GraphSyncOutboxEvent | null> {
+  async claimAndGetNextRetryableEvent(
+    tenantId?: string,
+    libraryId?: string,
+  ): Promise<GraphSyncOutboxEvent | null> {
     const now = new Date();
     const nowIso = now.toISOString();
     const lockExpiresAt = new Date(now.getTime() + 2 * 60 * 1000).toISOString();
-    const tenantFilter = tenantId ? { tenantId } : {};
+    const scopeFilter = this.buildScopeFilter(tenantId, libraryId);
     const result = await this.db.graphSyncOutboxCollection.findOneAndUpdate(
       {
-        ...tenantFilter,
+        ...scopeFilter,
         status: { $in: ['PENDING', 'FAILED'] },
         attempts: { $lt: 10 },
         $or: [
@@ -182,5 +212,12 @@ export class MongoDocumentRepository implements DocumentRepositoryPort {
     await this.db.chunksCollection.deleteMany({ documentId });
     await this.db.graphSyncOutboxCollection.deleteMany({ documentId });
     await this.db.documentsCollection.deleteOne({ documentId });
+  }
+
+  private buildScopeFilter(tenantId?: string, libraryId?: string): Record<string, string> {
+    return {
+      ...(tenantId ? { tenantId } : {}),
+      ...(libraryId ? { libraryId } : {}),
+    };
   }
 }

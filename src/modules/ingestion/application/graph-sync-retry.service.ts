@@ -36,18 +36,22 @@ export class GraphSyncRetryService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async retry(limit: number, tenantId?: string): Promise<{ processed: number; synced: number; failed: number }> {
+  async retry(
+    limit: number,
+    tenantId?: string,
+    libraryId?: string,
+  ): Promise<{ processed: number; synced: number; failed: number }> {
     let synced = 0;
     let failed = 0;
     let processed = 0;
 
     for (let i = 0; i < limit; i++) {
-      const event = await this.documentRepository.claimAndGetNextRetryableEvent(tenantId);
+      const event = await this.documentRepository.claimAndGetNextRetryableEvent(tenantId, libraryId);
       if (!event) break;
 
       try {
         const graph = JSON.parse(event.payload) as ExtractedGraph;
-        await this.graphStore.upsertGraph(graph, event.tenantId);
+        await this.graphStore.upsertGraph(graph, event.tenantId, event.libraryId);
         await this.documentRepository.updateDocumentStatus(event.documentId, 'READY', 'SYNCED');
         await this.documentRepository.markGraphSyncEvent(event.eventId, 'SYNCED', {
           lastError: '',

@@ -7,6 +7,7 @@ export type ReindexChunksInput = {
   limit?: number;
   mode?: 'rebuild' | 'incremental';
   tenantId?: string;
+  libraryId?: string;
 };
 
 export type ReindexChunksOutput = {
@@ -30,8 +31,13 @@ export class ReindexChunksUseCase {
     const embeddingModel = this.embeddingPort.getModelId();
     const chunks =
       mode === 'incremental'
-        ? await this.documentRepository.listChunksNeedingReindex(embeddingModel, limit, input.tenantId)
-        : await this.documentRepository.listAllChunks(limit, input.tenantId);
+        ? await this.documentRepository.listChunksNeedingReindex(
+            embeddingModel,
+            limit,
+            input.tenantId,
+            input.libraryId,
+          )
+        : await this.documentRepository.listAllChunks(limit, input.tenantId, input.libraryId);
     let processed = 0;
     let failed = 0;
 

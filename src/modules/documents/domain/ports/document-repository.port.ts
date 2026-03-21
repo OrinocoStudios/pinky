@@ -9,23 +9,37 @@ export interface DocumentRepositoryPort {
     graphSyncStatus?: DocumentRecord['graphSyncStatus'],
   ): Promise<void>;
   addChunks(chunks: DocumentChunk[]): Promise<void>;
-  listAllChunks(limit?: number, tenantId?: string): Promise<DocumentChunk[]>;
+  listAllChunks(limit?: number, tenantId?: string, libraryId?: string): Promise<DocumentChunk[]>;
   listChunksNeedingReindex(
     currentEmbeddingModel: string,
     limit?: number,
     tenantId?: string,
+    libraryId?: string,
   ): Promise<DocumentChunk[]>;
   updateChunkEmbedding(chunkId: string, embedding: number[], embeddingModel: string): Promise<void>;
-  listDocuments(limit?: number): Promise<DocumentRecord[]>;
-  listDocumentsByTenant(tenantId: string, limit?: number): Promise<DocumentRecord[]>;
+  listDocuments(limit?: number, libraryId?: string): Promise<DocumentRecord[]>;
+  listDocumentsByTenant(tenantId: string, limit?: number, libraryId?: string): Promise<DocumentRecord[]>;
+  listDocumentsByLibrary(
+    libraryId: string,
+    tenantId?: string,
+    limit?: number,
+  ): Promise<DocumentRecord[]>;
   findDocumentById(documentId: string): Promise<DocumentRecord | null>;
-  findDocumentByChecksum(checksum: string, tenantId?: string): Promise<DocumentRecord | null>;
+  findDocumentByChecksum(
+    checksum: string,
+    tenantId?: string,
+    libraryId?: string,
+  ): Promise<DocumentRecord | null>;
   enqueueGraphSyncEvent(
     documentId: string,
     graph: ExtractedGraph,
     tenantId?: string,
+    libraryId?: string,
   ): Promise<GraphSyncOutboxEvent>;
-  claimAndGetNextRetryableEvent(tenantId?: string): Promise<GraphSyncOutboxEvent | null>;
+  claimAndGetNextRetryableEvent(
+    tenantId?: string,
+    libraryId?: string,
+  ): Promise<GraphSyncOutboxEvent | null>;
   markGraphSyncEvent(
     eventId: string,
     status: GraphSyncOutboxEvent['status'],

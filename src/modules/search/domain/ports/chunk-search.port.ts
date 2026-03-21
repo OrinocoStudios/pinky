@@ -4,6 +4,7 @@ export interface ChunkSearchQuery {
   queryText: string;
   topK: number;
   tenantId?: string;
+  libraryIds?: string[];
 }
 
 export interface ChunkSearchPort {

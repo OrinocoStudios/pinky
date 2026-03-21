@@ -89,4 +89,63 @@ describe('Query (e2e)', () => {
     expect(res.body.answer).toBeDefined();
     expect(res.body.prompt).toContain('Curie');
   });
+
+  it('POST /query — should scope retrieval by X-Library-Id header', async () => {
+    await request(app.getHttpServer())
+      .post('/documents/text')
+      .set('X-Library-Id', 'library-a')
+      .send({
+        title: 'Library A',
+        rawText: 'Alpha library context only.',
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/documents/text')
+      .set('X-Library-Id', 'library-b')
+      .send({
+        title: 'Library B',
+        rawText: 'Beta library context only.',
+      })
+      .expect(201);
+
+    const res = await request(app.getHttpServer())
+      .post('/query')
+      .set('X-Library-Id', 'library-a')
+      .send({ query: 'Which library has alpha?', topK: 10 })
+      .expect(201);
+
+    const context = (res.body.fastContext ?? []).map((chunk: { text: string }) => chunk.text).join(' ');
+    expect(context).toContain('Alpha library context only.');
+    expect(context).not.toContain('Beta library context only.');
+  });
+
+  it('POST /query — should support multiple libraryIds in the body', async () => {
+    await request(app.getHttpServer())
+      .post('/documents/text')
+      .set('X-Library-Id', 'library-a')
+      .send({
+        title: 'Library A',
+        rawText: 'Alpha library context only.',
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/documents/text')
+      .set('X-Library-Id', 'library-b')
+      .send({
+        title: 'Library B',
+        rawText: 'Beta library context only.',
+      })
+      .expect(201);
+
+    const res = await request(app.getHttpServer())
+      .post('/query')
+      .send({ query: 'Show all scoped libraries', topK: 10, libraryIds: ['library-a', 'library-b'] })
+      .expect(201);
+
+    const context = (res.body.fastContext ?? []).map((chunk: { text: string }) => chunk.text).join(' ');
+    expect(context).toContain('Alpha library context only.');
+    expect(context).toContain('Beta library context only.');
+  });
 });

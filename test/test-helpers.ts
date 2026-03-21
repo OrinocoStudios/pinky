@@ -77,8 +77,12 @@ export class InMemoryDocumentRepository implements DocumentRepositoryPort {
     this.chunks.push(...chunks);
   }
 
-  async listAllChunks(limit = 10000, tenantId?: string): Promise<DocumentChunk[]> {
-    const chunks = tenantId ? this.chunks.filter((c) => c.tenantId === tenantId) : this.chunks;
+  async listAllChunks(limit = 10000, tenantId?: string, libraryId?: string): Promise<DocumentChunk[]> {
+    const chunks = this.chunks.filter(
+      (chunk) =>
+        (!tenantId || chunk.tenantId === tenantId) &&
+        (!libraryId || chunk.libraryId === libraryId),
+    );
     return chunks.slice(0, limit);
   }
 
@@ -86,9 +90,15 @@ export class InMemoryDocumentRepository implements DocumentRepositoryPort {
     currentModel: string,
     limit = 10000,
     tenantId?: string,
+    libraryId?: string,
   ): Promise<DocumentChunk[]> {
     return this.chunks
-      .filter((c) => c.embeddingModel !== currentModel && (!tenantId || c.tenantId === tenantId))
+      .filter(
+        (chunk) =>
+          chunk.embeddingModel !== currentModel &&
+          (!tenantId || chunk.tenantId === tenantId) &&
+          (!libraryId || chunk.libraryId === libraryId),
+      )
       .slice(0, limit);
   }
 
@@ -100,13 +110,31 @@ export class InMemoryDocumentRepository implements DocumentRepositoryPort {
     }
   }
 
-  async listDocuments(limit = 50): Promise<DocumentRecord[]> {
-    return [...this.documents].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+  async listDocuments(limit = 50, libraryId?: string): Promise<DocumentRecord[]> {
+    return [...this.documents]
+      .filter((document) => !libraryId || document.libraryId === libraryId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
   }
 
-  async listDocumentsByTenant(tenantId: string, limit = 50): Promise<DocumentRecord[]> {
+  async listDocumentsByTenant(
+    tenantId: string,
+    limit = 50,
+    libraryId?: string,
+  ): Promise<DocumentRecord[]> {
     return this.documents
-      .filter((d) => d.tenantId === tenantId)
+      .filter((document) => document.tenantId === tenantId && (!libraryId || document.libraryId === libraryId))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
+  }
+
+  async listDocumentsByLibrary(
+    libraryId: string,
+    tenantId?: string,
+    limit = 50,
+  ): Promise<DocumentRecord[]> {
+    return this.documents
+      .filter((document) => document.libraryId === libraryId && (!tenantId || document.tenantId === tenantId))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, limit);
   }
@@ -115,9 +143,18 @@ export class InMemoryDocumentRepository implements DocumentRepositoryPort {
     return this.documents.find((d) => d.documentId === documentId) ?? null;
   }
 
-  async findDocumentByChecksum(checksum: string, tenantId?: string): Promise<DocumentRecord | null> {
+  async findDocumentByChecksum(
+    checksum: string,
+    tenantId?: string,
+    libraryId?: string,
+  ): Promise<DocumentRecord | null> {
     return (
-      this.documents.find((d) => d.checksum === checksum && (tenantId ? d.tenantId === tenantId : true)) ??
+      this.documents.find(
+        (document) =>
+          document.checksum === checksum &&
+          (!tenantId || document.tenantId === tenantId) &&
+          (!libraryId || document.libraryId === libraryId),
+      ) ??
       null
     );
   }
@@ -126,11 +163,13 @@ export class InMemoryDocumentRepository implements DocumentRepositoryPort {
     documentId: string,
     graph: ExtractedGraph,
     tenantId?: string,
+    libraryId?: string,
   ): Promise<GraphSyncOutboxEvent> {
     const event: GraphSyncOutboxEvent = {
       eventId: `evt-${Date.now()}`,
       documentId,
       tenantId,
+      libraryId,
       payload: JSON.stringify(graph),
       status: 'PENDING',
       attempts: 0,
@@ -141,9 +180,15 @@ export class InMemoryDocumentRepository implements DocumentRepositoryPort {
     return event;
   }
 
-  async claimAndGetNextRetryableEvent(tenantId?: string): Promise<GraphSyncOutboxEvent | null> {
+  async claimAndGetNextRetryableEvent(
+    tenantId?: string,
+    libraryId?: string,
+  ): Promise<GraphSyncOutboxEvent | null> {
     const event = this.outboxEvents.find(
-      (e) => (e.status === 'PENDING' || e.status === 'FAILED') && (!tenantId || e.tenantId === tenantId),
+      (event) =>
+        (event.status === 'PENDING' || event.status === 'FAILED') &&
+        (!tenantId || event.tenantId === tenantId) &&
+        (!libraryId || event.libraryId === libraryId),
     );
     if (event) {
       event.status = 'PROCESSING';
@@ -180,14 +225,14 @@ export class InMemoryDocumentRepository implements DocumentRepositoryPort {
 // ── Mock GraphStore ────────────────────────────────────────────
 export class MockGraphStore implements GraphStorePort {
   async ping(): Promise<void> {}
-  async upsertGraph(_graph: ExtractedGraph, _tenantId?: string): Promise<void> {}
-  async findEntitiesByNames(_names: string[], _tenantId?: string) {
+  async upsertGraph(_graph: ExtractedGraph, _tenantId?: string, _libraryId?: string): Promise<void> {}
+  async findEntitiesByNames(_names: string[], _tenantId?: string, _libraryIds?: string[]) {
     return [];
   }
-  async findRelationshipsForEntityIds(_ids: string[], _tenantId?: string) {
+  async findRelationshipsForEntityIds(_ids: string[], _tenantId?: string, _libraryIds?: string[]) {
     return [];
   }
-  async deleteByDocumentId(_id: string, _tenantId?: string): Promise<void> {}
+  async deleteByDocumentId(_id: string, _tenantId?: string, _libraryId?: string): Promise<void> {}
 }
 
 // ── Mock EmbeddingPort ─────────────────────────────────────────
@@ -226,10 +271,17 @@ export class MockAnswerGenerator implements AnswerGeneratorPort {
 export class MockChunkSearch implements ChunkSearchPort {
   constructor(private readonly repo: InMemoryDocumentRepository) {}
 
-  async hybridSearch(query: { queryText: string; topK: number; tenantId?: string }): Promise<DocumentChunk[]> {
-    const filtered = query.tenantId
-      ? this.repo.chunks.filter((chunk) => chunk.tenantId === query.tenantId)
-      : this.repo.chunks;
+  async hybridSearch(query: {
+    queryText: string;
+    topK: number;
+    tenantId?: string;
+    libraryIds?: string[];
+  }): Promise<DocumentChunk[]> {
+    const filtered = this.repo.chunks.filter(
+      (chunk) =>
+        (!query.tenantId || chunk.tenantId === query.tenantId) &&
+        (!query.libraryIds?.length || query.libraryIds.includes(chunk.libraryId ?? '')),
+    );
     return filtered.slice(0, query.topK);
   }
 }

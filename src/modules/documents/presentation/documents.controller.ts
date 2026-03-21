@@ -39,10 +39,16 @@ export class DocumentsController {
 
   @Post('text')
   @RequireApiKey()
-  async ingestText(@Body() body: IngestTextDocumentDto, @Headers('x-tenant-id') tenantHeader?: string) {
+  async ingestText(
+    @Body() body: IngestTextDocumentDto,
+    @Headers('x-tenant-id') tenantHeader?: string,
+    @Headers('x-library-id') libraryHeader?: string,
+  ) {
     const tenantId = this.resolveTenantId(tenantHeader);
+    const libraryId = this.resolveLibraryId(libraryHeader);
     return this.ingestDocumentUseCase.execute({
       tenantId,
+      libraryId,
       title: body.title,
       rawText: body.rawText,
       source: body.source ?? { kind: 'generated', useCaseId: 'manual-api-text' },
@@ -55,13 +61,16 @@ export class DocumentsController {
   async generateDocument(
     @Body() body: GenerateDocumentDto,
     @Headers('x-tenant-id') tenantHeader?: string,
+    @Headers('x-library-id') libraryHeader?: string,
   ) {
     if (!body.useCaseId?.trim()) {
       throw new BadRequestException('useCaseId is required');
     }
     const tenantId = this.resolveTenantId(tenantHeader);
+    const libraryId = this.resolveLibraryId(libraryHeader);
     return this.generateDocumentUseCase.execute({
       tenantId,
+      libraryId,
       useCaseId: body.useCaseId,
       title: body.title,
       params: body.params,
@@ -76,6 +85,7 @@ export class DocumentsController {
     @UploadedFile() file: Express.Multer.File | undefined,
     @Body() body: UploadDocumentDto,
     @Headers('x-tenant-id') tenantHeader?: string,
+    @Headers('x-library-id') libraryHeader?: string,
   ) {
     if (!file) {
       throw new BadRequestException('file is required');
@@ -87,8 +97,10 @@ export class DocumentsController {
     }
 
     const tenantId = this.resolveTenantId(tenantHeader);
+    const libraryId = this.resolveLibraryId(libraryHeader);
     return this.ingestDocumentUseCase.execute({
       tenantId,
+      libraryId,
       title: body.title ?? file.originalname ?? 'uploaded-file',
       rawText: extracted,
       source: {
@@ -104,19 +116,31 @@ export class DocumentsController {
   }
 
   @Get()
-  async listDocuments(@Headers('x-tenant-id') tenantHeader?: string) {
+  async listDocuments(
+    @Headers('x-tenant-id') tenantHeader?: string,
+    @Headers('x-library-id') libraryHeader?: string,
+  ) {
     const tenantId = this.resolveTenantId(tenantHeader);
+    const libraryId = this.resolveLibraryId(libraryHeader);
     if (tenantId) {
-      return this.documentRepository.listDocumentsByTenant(tenantId, 100);
+      return this.documentRepository.listDocumentsByTenant(tenantId, 100, libraryId);
     }
-    return this.documentRepository.listDocuments(100);
+    if (libraryId) {
+      return this.documentRepository.listDocumentsByLibrary(libraryId, undefined, 100);
+    }
+    return this.documentRepository.listDocuments(100, libraryId);
   }
 
   @Delete(':id')
   @RequireApiKey()
-  async deleteDocument(@Param('id') documentId: string, @Headers('x-tenant-id') tenantHeader?: string) {
+  async deleteDocument(
+    @Param('id') documentId: string,
+    @Headers('x-tenant-id') tenantHeader?: string,
+    @Headers('x-library-id') libraryHeader?: string,
+  ) {
     const tenantId = this.resolveTenantId(tenantHeader);
-    await this.deleteDocumentUseCase.execute(documentId, tenantId);
+    const libraryId = this.resolveLibraryId(libraryHeader);
+    await this.deleteDocumentUseCase.execute(documentId, tenantId, libraryId);
     return { deleted: documentId };
   }
 
@@ -127,5 +151,10 @@ export class DocumentsController {
       throw new BadRequestException('X-Tenant-Id header is required when ENABLE_MULTI_TENANT=true');
     }
     return tenantId;
+  }
+
+  private resolveLibraryId(rawLibraryId?: string): string | undefined {
+    const libraryId = rawLibraryId?.trim();
+    return libraryId && libraryId.length > 0 ? libraryId : undefined;
   }
 }

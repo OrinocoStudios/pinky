@@ -14,10 +14,15 @@ export class OutboxController {
 
   @Post('retry')
   @RequireApiKey()
-  async retry(@Body() body: RetryOutboxDto, @Headers('x-tenant-id') tenantHeader?: string) {
+  async retry(
+    @Body() body: RetryOutboxDto,
+    @Headers('x-tenant-id') tenantHeader?: string,
+    @Headers('x-library-id') libraryHeader?: string,
+  ) {
     const tenantId = this.resolveTenantId(tenantHeader);
+    const libraryId = this.resolveLibraryId(libraryHeader);
     const limit = body.limit ?? 20;
-    return this.retryService.retry(limit, tenantId);
+    return this.retryService.retry(limit, tenantId, libraryId);
   }
 
   private resolveTenantId(rawTenantId?: string): string | undefined {
@@ -27,5 +32,10 @@ export class OutboxController {
       throw new BadRequestException('X-Tenant-Id header is required when ENABLE_MULTI_TENANT=true');
     }
     return tenantId;
+  }
+
+  private resolveLibraryId(rawLibraryId?: string): string | undefined {
+    const libraryId = rawLibraryId?.trim();
+    return libraryId && libraryId.length > 0 ? libraryId : undefined;
   }
 }
