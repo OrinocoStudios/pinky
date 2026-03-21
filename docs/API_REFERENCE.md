@@ -35,6 +35,24 @@ This applies to:
 - `POST /outbox/retry`
 - `GET /documents`
 
+## Library Scope Header
+
+All corpus endpoints accept an optional `X-Library-Id` header to scope documents within a library (a logical grouping inside a tenant). This is always optional — when omitted, operations apply to all libraries within the tenant.
+
+```
+X-Library-Id: <library-id>
+```
+
+The library ID is a free-form string. Naming conventions are up to the consuming service. Examples:
+- `global-medical-library` — shared PDFs across all doctors
+- `patient:abc123` — documents specific to a patient
+- `strategy:btc-2026` — a trading strategy corpus
+- `project:pinky` — software documentation corpus
+
+For `POST /query`, you can also pass multiple library IDs via the request body (`libraryIds` array) to query across several libraries at once. The header serves as a fallback when the body field is not provided.
+
+This applies to all endpoints listed in the Multi-tenant section above.
+
 ---
 
 ## Endpoints
@@ -295,7 +313,8 @@ X-API-Key: <key>
 ```json
 {
   "query": "string (required)",
-  "entityHints": ["string"] ,
+  "entityHints": ["string"],
+  "libraryIds": ["string"],
   "topK": 8
 }
 ```
@@ -304,6 +323,7 @@ X-API-Key: <key>
 |-------|------|----------|---------|-------------|
 | `query` | string | **Yes** | — | The natural language question |
 | `entityHints` | string[] | No | auto-extracted | Entity names to prioritize in graph lookup |
+| `libraryIds` | string[] | No | from `X-Library-Id` header | Library IDs to scope the query. Overrides the header. Multiple IDs query across libraries. |
 | `topK` | integer | No | `8` | Number of chunks to retrieve (1–50) |
 
 **Response** (`200 OK`):

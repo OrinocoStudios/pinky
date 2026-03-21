@@ -132,3 +132,42 @@ Si necesitas endurecimiento adicional para producción multi-tenant:
 - añadir observabilidad segmentada por tenant (métricas y alertas),
 - definir políticas de cuotas/rate limiting por tenant.
 
+## 9) Library Scope (agrupación de documentos)
+
+Dentro de un tenant, los documentos se pueden agrupar en **bibliotecas** usando el header `X-Library-Id`.
+
+Esto permite organizar el corpus sin necesidad de múltiples deployments:
+
+```bash
+# Ingestar en una biblioteca específica
+curl -X POST "http://localhost:8081/documents/text" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -H "X-Tenant-Id: clinica-salud" \
+  -H "X-Library-Id: patient:abc123" \
+  -d '{"title": "Historia clínica", "rawText": "Paciente presenta..."}'
+
+# Consultar una sola biblioteca
+curl -X POST "http://localhost:8081/query" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -H "X-Tenant-Id: clinica-salud" \
+  -H "X-Library-Id: patient:abc123" \
+  -d '{"query": "¿Qué presenta el paciente?"}'
+
+# Consultar múltiples bibliotecas a la vez
+curl -X POST "http://localhost:8081/query" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -H "X-Tenant-Id: clinica-salud" \
+  -d '{"query": "¿Hay contraindicaciones?", "libraryIds": ["global-medical-library", "patient:abc123"]}'
+```
+
+### Características
+
+- **Siempre opcional**: sin `X-Library-Id`, el sistema opera sobre todo el corpus del tenant.
+- **Aditivo**: no requiere configuración previa; el `libraryId` se crea implícitamente al ingestar el primer documento.
+- **Multi-biblioteca en queries**: el body de `POST /query` acepta `libraryIds: string[]` para consultar múltiples bibliotecas.
+- **Aislamiento completo**: documentos, chunks, embeddings, entidades y relaciones del grafo se filtran por `libraryId`.
+- **Backward-compatible**: servicios que no envían el header siguen funcionando exactamente igual.
+

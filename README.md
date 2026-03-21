@@ -50,6 +50,45 @@ Opcional: `REINDEX_LIMIT=100 yarn reindex` para limitar chunks procesados.
 - `POST /query`
 - `POST /index/rebuild` (body: `{ limit? }`)
 - `POST /index/incremental` (body: `{ limit? }`)
+- `GET /metrics` (Prometheus)
+
+Ver [docs/API_REFERENCE.md](docs/API_REFERENCE.md) para documentación completa de cada endpoint.
+
+## Scoping: Tenant + Library
+
+Pinky soporta dos niveles de organización de datos, ambos opcionales:
+
+- **`X-Tenant-Id`**: Organización de nivel superior (clínica, empresa, equipo). Requerido cuando `ENABLE_MULTI_TENANT=true`.
+- **`X-Library-Id`**: Biblioteca lógica dentro de un tenant (corpus global, paciente específico, proyecto). Siempre opcional.
+
+Ejemplo de uso típico para una clínica médica:
+
+```bash
+# Subir documento a la biblioteca global compartida
+curl -X POST http://localhost:8081/documents/text \
+  -H "X-Tenant-Id: clinica-salud" \
+  -H "X-Library-Id: global-medical-library" \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Protocolo COVID", "rawText": "..."}'
+
+# Subir documento específico de un paciente
+curl -X POST http://localhost:8081/documents/text \
+  -H "X-Tenant-Id: clinica-salud" \
+  -H "X-Library-Id: patient:abc123" \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Análisis de sangre", "rawText": "..."}'
+
+# Consultar cruzando biblioteca global + paciente
+curl -X POST http://localhost:8081/query \
+  -H "X-Tenant-Id: clinica-salud" \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "¿Hay contraindicaciones?", "libraryIds": ["global-medical-library", "patient:abc123"]}'
+```
+
+Sin headers de scope, el sistema opera sobre todo el corpus disponible (comportamiento por defecto).
 
 ## Pipeline 1 (estado actual)
 

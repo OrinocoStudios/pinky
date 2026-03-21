@@ -4,6 +4,37 @@ Este registro resume cambios de implementación para mantener contexto operativo
 
 ---
 
+## 2026-03-21 (Library Scoping — libraryId)
+
+### Added
+
+- `libraryId` opcional en `DocumentRecord`, `DocumentChunk` y `GraphSyncOutboxEvent`.
+- Header `X-Library-Id` aceptado en todos los endpoints de corpus (documents, query, index, outbox).
+- `libraryIds: string[]` en el body de `POST /query` para consultas multi-biblioteca.
+- Método `listDocumentsByLibrary(libraryId, tenantId?, limit?)` en `DocumentRepositoryPort`.
+- Índices de MongoDB para scoping por library: `{ libraryId, tenantId, createdAt }`, `{ libraryId, documentId }`, `{ tenantId, libraryId, checksum }` (unique).
+- Propiedades `libraryId` en nodos `Document`, `Entity` y relaciones `MENTIONS`, `RELATED` de Neo4j.
+- Filtro por `libraryIds` (lista) en Neo4j para `findEntitiesByNames` y `findRelationshipsForEntityIds`.
+- Tests E2E: aislamiento por biblioteca y consulta multi-biblioteca.
+- ADR-0009: Library scoping como segundo nivel de organización.
+
+### Changed
+
+- Todos los puertos de dominio (`DocumentRepositoryPort`, `GraphStorePort`, `ChunkSearchPort`) aceptan `libraryId`/`libraryIds` como parámetro opcional.
+- Todos los use cases (ingest, query, delete, generate, reindex, graph-sync-retry) propagan `libraryId`.
+- Todos los controllers leen `X-Library-Id` y lo propagan.
+- `MongoChunkSearchAdapter` filtra candidatos por `libraryIds` (con `$in`).
+- Índice único de checksum migrado de `{ tenantId, checksum }` a `{ tenantId, libraryId, checksum }`.
+- CORS ahora permite `X-Tenant-Id` y `X-Library-Id`.
+
+### Notes
+
+- 100% backward-compatible: sin `X-Library-Id`, el comportamiento es idéntico al anterior.
+- El `libraryId` es implícito — se crea al ingestar el primer documento con ese ID, sin registro previo.
+- La capa de negocio (servicio externo) es responsable de definir qué significa cada `libraryId`.
+
+---
+
 ## 2026-02-24 (Fase 3 - Hardening operacional y estabilización)
 
 ### Added

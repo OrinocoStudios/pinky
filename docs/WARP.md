@@ -1,156 +1,146 @@
-# Brain Service - Contexto para Warp AI
+# Brain Service (Pinky) — Contexto para Warp AI
 
 ## Descripción del Proyecto
 
-Brain Service es un servicio API para ingesta documental y GraphRAG (Graph Retrieval-Augmented Generation) implementado con arquitectura hexagonal en NestJS. El servicio combina bases de datos vectoriales, grafos de conocimiento y búsqueda semántica para proporcionar respuestas contextualizadas basadas en documentos.
+Pinky es un motor RAG genérico (Graph Retrieval-Augmented Generation) con arquitectura hexagonal en NestJS. Ingesta documentos, los fragmenta, genera embeddings vectoriales, extrae un grafo de conocimiento, y responde preguntas con citación de fuentes.
+
+**No es una aplicación de negocio** — es la capa de infraestructura de conocimiento que otros servicios consumen vía HTTP.
 
 ## Arquitectura
 
-### Estructura Hexagonal
+### Estructura Hexagonal (por módulo)
 
 ```
-src/
-├── domain/          # Modelos y puertos (sin dependencias externas)
-├── application/     # Casos de uso y lógica de negocio
-├── infrastructure/  # Adaptadores (mongo, neo4j, elasticsearch)
-└── config/          # Configuración central de runtime
+src/modules/<module>/
+├── domain/
+│   ├── models/       # Tipos e interfaces de dominio
+│   └── ports/        # Contratos (interfaces) que la infraestructura implementa
+├── application/      # Casos de uso y lógica de orquestación
+├── infrastructure/   # Adaptadores concretos (mongo, neo4j, ollama, openai, etc.)
+└── presentation/     # Controllers HTTP y DTOs
 ```
 
-### Componentes Principales
+### Stack Tecnológico
 
-- **MongoDB**: Almacenamiento de documentos, chunks y embeddings
-- **Neo4j**: Grafo de conocimiento con entidades y relaciones
-- **Search Engine**: Motor de búsqueda desacoplado (MongoDB por defecto, Elasticsearch opcional)
+- **Framework**: NestJS 11.x / TypeScript 5.6 / Node.js 20
+- **Almacenamiento documental**: MongoDB (mongoose 8.7) — documentos, chunks, embeddings, outbox
+- **Grafo de conocimiento**: Neo4j (neo4j-driver 5.26) — entidades, relaciones, Document→MENTIONS→Entity
+- **Embeddings**: Ollama (`nomic-embed-text` por defecto) vía `/api/embed`
+- **Extracción de grafo**: Ollama (`llama3.2` por defecto) vía `/api/generate` con output JSON
+- **Generación de respuesta**: OpenAI, Anthropic, o modo local (seleccionable con `LLM_PROVIDER`)
+- **Métricas**: Prometheus vía `@willsoto/nestjs-prometheus`
+- **Auth**: API Key vía `X-API-Key` header
+- **Rate limiting**: `@nestjs/throttler` por endpoint
 
-## Tecnologías
+## Organización de datos: Tenant + Library
 
-- **Framework**: NestJS 11.x
-- **Runtime**: Node.js con TypeScript 5.6
-- **Bases de datos**: 
-  - MongoDB (mongoose 8.7)
-  - Neo4j (neo4j-driver 5.26)
-- **Procesamiento**: 
-  - PDF (pdf-parse)
-  - DOCX (mammoth)
-  - Validación (class-validator, class-transformer)
+Dos niveles jerárquicos de scope, ambos opcionales:
+
+- **`X-Tenant-Id`**: Organización (clínica, empresa). Requerido cuando `ENABLE_MULTI_TENANT=true`.
+- **`X-Library-Id`**: Biblioteca lógica dentro del tenant (corpus global, paciente, proyecto). Siempre opcional.
+
+```
+Tenant (X-Tenant-Id: "clinica-salud")
+├── Library "global-medical-library"  → PDFs compartidos
+├── Library "patient:abc123"          → documentos del paciente
+└── Library "patient:xyz789"          → documentos de otro paciente
+```
+
+Para queries: `POST /query` acepta `libraryIds: string[]` en el body para consultar múltiples bibliotecas a la vez.
 
 ## Pipelines
 
-### Pipeline 1: Ingesta de Documentos
+### Pipeline de Ingesta
 
-1. Guarda documento y metadata en MongoDB (`documents`)
-2. Realiza chunking + genera embeddings determinísticos en MongoDB (`chunks`)
-3. Extrae entidades y relaciones (regla naive) y hace upsert en Neo4j
-4. Usa Outbox pattern en MongoDB (`graph_sync_outbox`) para sincronización con retries automáticos
-5. Manejo de consistencia:
-   - Si falla Neo4j, el documento queda en MongoDB marcado como `ERROR/FAILED`
-   - Los eventos quedan en outbox y pueden reprocesarse
+1. Recibe texto o archivo (`POST /documents/text`, `/upload`, `/generate`)
+2. Chunking con overlap configurable (`CHUNK_SIZE`, `CHUNK_OVERLAP`)
+3. Embedding vectorial por chunk (Ollama `nomic-embed-text`)
+4. Extracción de entidades/relaciones por chunk (Ollama `llama3.2`, output JSON)
+5. Persistencia en MongoDB (documento + chunks + embeddings)
+6. Upsert del grafo en Neo4j (Document, Entity, MENTIONS, RELATED)
+7. Outbox event para retry si Neo4j falla
+8. Deduplicación por checksum SHA-256 (por tenant + library)
 
-### Pipeline 2: Consultas GraphRAG
+### Pipeline de Query (GraphRAG)
 
-1. `POST /query` ejecuta GraphRAG básico:
-   - Recupera contexto desde chunks en MongoDB (búsqueda híbrida)
-   - Recupera hechos del grafo en Neo4j
-   - Construye prompt grounded y genera respuesta local
+1. Recibe pregunta (`POST /query`)
+2. Embedding del query → búsqueda híbrida (vector + texto) en chunks de MongoDB
+3. Extracción de entity hints → búsqueda de entidades y relaciones en Neo4j
+4. Construcción de prompt grounded con `[CTX-X]` y `[FACT-X]`
+5. Generación de respuesta con LLM (OpenAI/Anthropic/local)
+6. Extracción de fuentes citadas de la respuesta
+7. Retorno: answer, sourcesUsed, fastContext, truthFacts, model, tokensUsed
 
 ## Endpoints API
 
-- `GET /health` - Health check
-- `POST /documents/text` - Ingesta de texto plano
-- `POST /documents/upload` - Upload de archivos (txt/md/json/csv/pdf/docx)
-- `GET /documents` - Listar documentos
-- `POST /outbox/retry` - Reintentar eventos fallidos
-- `POST /query` - Consultas con GraphRAG
+- `GET /health` — Health check (MongoDB, Neo4j, LLM)
+- `GET /documents` — Listar documentos (filtrable por tenant/library)
+- `POST /documents/text` 🔐 — Ingestar texto plano
+- `POST /documents/upload` 🔐 — Subir archivo (txt/md/json/csv/pdf/docx)
+- `POST /documents/generate` 🔐 — Generar documento desde template
+- `DELETE /documents/:id` 🔐 — Eliminar documento + chunks + grafo
+- `POST /query` 🔐 — Consulta GraphRAG con citación
+- `POST /outbox/retry` 🔐 — Reintentar sync de grafo fallidos
+- `POST /index/rebuild` 🔐 — Re-embeddings de todos los chunks
+- `POST /index/incremental` 🔐 — Re-embeddings de chunks desactualizados
+- `GET /metrics` — Métricas Prometheus
 
-## Configuración Local
+Documentación completa: `docs/API_REFERENCE.md`
 
-### Variables de Entorno
+## Variables de Entorno Clave
 
-Ver `.env.example` para configuración requerida:
-- Conexiones a MongoDB y Neo4j
-- Configuración del motor de búsqueda (`SEARCH_ENGINE=mongodb|elasticsearch`)
-- Configuraciones de chunking y embeddings
+```env
+# App
+PORT=8081
+API_KEY=<secret>
+ENABLE_API_KEY_AUTH=true
+ENABLE_MULTI_TENANT=false
 
-### Arranque
+# Databases
+MONGODB_URI=mongodb://localhost:27021/brain_service
+NEO4J_URI=bolt://localhost:7688
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=<secret>
 
-```bash
-# Levantar servicios (MongoDB, Neo4j)
-docker compose -f docker-compose.yml up -d
+# Ollama (embeddings + graph extraction)
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_EMBEDDING_MODEL=nomic-embed-text
+OLLAMA_EXTRACTION_MODEL=llama3.2
 
-# Configurar variables de entorno
-cp .env.example .env
+# LLM Provider (answer generation)
+LLM_PROVIDER=local|openai|anthropic
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
 
-# Instalar dependencias
-yarn install
-
-# Modo desarrollo
-yarn start:dev
+# Chunking
+CHUNK_SIZE=1200
+CHUNK_OVERLAP=200
+TOP_K=8
 ```
 
-## Patrones y Principios
-
-### Arquitectura Hexagonal
-
-- **Puertos**: Interfaces que definen contratos (ej: `ChunkSearchPort`)
-- **Adaptadores**: Implementaciones concretas (ej: `MongoChunkSearchAdapter`, `ElasticsearchChunkSearchAdapter`)
-- **Domain**: Libre de dependencias externas
-- **Infrastructure**: Contiene todos los detalles técnicos
-
-### Outbox Pattern
-
-Garantiza consistencia eventual entre MongoDB y Neo4j:
-- Eventos almacenados en `graph_sync_outbox`
-- Retries automáticos con backoff
-- Estado: `PENDING`, `PROCESSING`, `SUCCESS`, `ERROR`, `FAILED`
-
-### Motor de Búsqueda Desacoplado
-
-El puerto `ChunkSearchPort` permite cambiar fácilmente entre implementaciones:
-- `MongoChunkSearchAdapter` (por defecto)
-- `ElasticsearchChunkSearchAdapter` (cuando `SEARCH_ENGINE=elasticsearch`)
-
-## Comandos Útiles
+## Comandos
 
 ```bash
-# Build de producción
-yarn build
-
-# Inicio en producción
-yarn start
-
-# Linting
-yarn lint
+npm run build          # Compilar TypeScript
+npm run start:dev      # Desarrollo con watch
+npm run start          # Producción
+npm run test:e2e       # Tests end-to-end
+npm run lint           # ESLint
+npm run reindex        # Reindexar embeddings de chunks existentes
 ```
 
-## Estructura de Datos
+## Documentación
 
-### Documento
-- Metadata: título, fuente, tipo, fechas
-- Estado de procesamiento
-- Referencias a chunks
+- `docs/API_REFERENCE.md` — Referencia completa de endpoints con ejemplos
+- `docs/INTEGRATION_GUIDE.md` — Guía de integración para servicios consumidores
+- `docs/CHANGELOG.md` — Historial de cambios por fase
+- `docs/ADR/` — Architecture Decision Records (9 ADRs)
+- `docs/DEPLOY_DOKPLOY.md` — Guía de deploy con Dokploy
+- `docs/GITHUB_REGISTRY.md` — Publicación de imagen Docker
 
-### Chunk
-- Texto del fragmento
-- Embeddings vectoriales
-- Posición en documento original
-- Metadata heredada
+## Patrones Clave
 
-### Grafo (Neo4j)
-- Nodos: Entidades extraídas
-- Relaciones: Conexiones semánticas
-- Propiedades: Metadata contextual
-
-## Notas de Desarrollo
-
-- El proyecto usa arquitectura hexagonal estricta
-- Los adaptadores son intercambiables siguiendo los puertos
-- La consistencia se maneja con outbox pattern
-- El sistema es extensible para nuevos motores de búsqueda y fuentes de datos
-
-## Roadmap
-
-- Mejora de extracción de entidades (LLM-based)
-- Soporte para más formatos de documentos
-- Optimización de búsqueda híbrida
-- Implementación de caché distribuido
-- Métricas y observabilidad
+- **Hexagonal Architecture**: puertos (interfaces) + adaptadores (implementaciones). Los puertos viven en `domain/ports/`, los adaptadores en `infrastructure/`.
+- **Outbox Pattern**: consistencia eventual entre MongoDB y Neo4j. Eventos de sync en `graph_sync_outbox` con retry automático cada 30s y dead-letter después de 10 intentos.
+- **Provider Factory**: selección dinámica de adaptadores por configuración (`LLM_PROVIDER`, `SEARCH_ENGINE`).
+- **Checksum Idempotency**: SHA-256 del contenido para deduplicación. Scoped por tenant + library.
