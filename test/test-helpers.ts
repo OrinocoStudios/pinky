@@ -24,13 +24,12 @@ import { ChunkSearchPort } from '../src/modules/search/domain/ports/chunk-search
 import { DocumentGeneratorPort } from '../src/modules/documents/domain/ports/document-generator.port';
 import { FileTextExtractorPort } from '../src/modules/ingestion/domain/ports/file-text-extractor.port';
 
-import { DocumentRecord, DocumentChunk, GraphSyncOutboxEvent } from '../src/modules/documents/domain/models/document.model';
+import { DocumentRecord, DocumentChunk } from '../src/modules/documents/domain/models/document.model';
 import { ExtractedGraph } from '../src/modules/graph/domain/models/graph.model';
 
 import { HealthController } from '../src/modules/health/health.controller';
 import { DocumentsController } from '../src/modules/documents/presentation/documents.controller';
 import { QueryController } from '../src/modules/query/presentation/query.controller';
-import { OutboxController } from '../src/modules/ingestion/presentation/outbox.controller';
 import { IndexController } from '../src/modules/index/presentation/index.controller';
 
 import { IngestDocumentUseCase } from '../src/modules/ingestion/application/ingest-document.usecase';
@@ -38,7 +37,7 @@ import { DeleteDocumentUseCase } from '../src/modules/documents/application/dele
 import { GenerateDocumentUseCase } from '../src/modules/documents/application/generate-document.usecase';
 import { ReindexChunksUseCase } from '../src/modules/ingestion/application/reindex-chunks.usecase';
 import { GraphRagQueryUseCase } from '../src/modules/query/application/graph-rag-query.usecase';
-import { GraphSyncRetryService } from '../src/modules/ingestion/application/graph-sync-retry.service';
+import { SummarizeUseCase } from '../src/modules/query/application/summarize.usecase';
 import { SimpleChunkerService } from '../src/modules/ingestion/application/simple-chunker.service';
 import { PromptTemplateService } from '../src/modules/query/application/prompt-template.service';
 import { ChecksumService } from '../src/common/utils/checksum.service';
@@ -51,7 +50,6 @@ import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter
 export class InMemoryDocumentRepository implements DocumentRepositoryPort {
   documents: DocumentRecord[] = [];
   chunks: DocumentChunk[] = [];
-  outboxEvents: GraphSyncOutboxEvent[] = [];
 
   async createDocument(input: Omit<DocumentRecord, 'createdAt' | 'updatedAt'>): Promise<DocumentRecord> {
     const now = new Date().toISOString();
@@ -159,66 +157,14 @@ export class InMemoryDocumentRepository implements DocumentRepositoryPort {
     );
   }
 
-  async enqueueGraphSyncEvent(
-    documentId: string,
-    graph: ExtractedGraph,
-    tenantId?: string,
-    libraryId?: string,
-  ): Promise<GraphSyncOutboxEvent> {
-    const event: GraphSyncOutboxEvent = {
-      eventId: `evt-${Date.now()}`,
-      documentId,
-      tenantId,
-      libraryId,
-      payload: JSON.stringify(graph),
-      status: 'PENDING',
-      attempts: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    this.outboxEvents.push(event);
-    return event;
-  }
-
-  async claimAndGetNextRetryableEvent(
-    tenantId?: string,
-    libraryId?: string,
-  ): Promise<GraphSyncOutboxEvent | null> {
-    const event = this.outboxEvents.find(
-      (event) =>
-        (event.status === 'PENDING' || event.status === 'FAILED') &&
-        (!tenantId || event.tenantId === tenantId) &&
-        (!libraryId || event.libraryId === libraryId),
-    );
-    if (event) {
-      event.status = 'PROCESSING';
-      event.attempts += 1;
-    }
-    return event ?? null;
-  }
-
-  async markGraphSyncEvent(
-    eventId: string,
-    status: GraphSyncOutboxEvent['status'],
-    details?: { attempts?: number; lastError?: string },
-  ): Promise<void> {
-    const event = this.outboxEvents.find((e) => e.eventId === eventId);
-    if (event) {
-      event.status = status;
-      if (details?.lastError !== undefined) event.lastError = details.lastError;
-    }
-  }
-
   async deleteDocument(documentId: string): Promise<void> {
     this.chunks = this.chunks.filter((c) => c.documentId !== documentId);
-    this.outboxEvents = this.outboxEvents.filter((e) => e.documentId !== documentId);
     this.documents = this.documents.filter((d) => d.documentId !== documentId);
   }
 
   reset(): void {
     this.documents = [];
     this.chunks = [];
-    this.outboxEvents = [];
   }
 }
 
@@ -233,6 +179,10 @@ export class MockGraphStore implements GraphStorePort {
     return [];
   }
   async deleteByDocumentId(_id: string, _tenantId?: string, _libraryId?: string): Promise<void> {}
+  async ensureVectorIndex(_dimensions: number): Promise<void> {}
+  async saveChunks(_chunks: any[], _tenantId?: string, _libraryId?: string): Promise<void> {}
+  async linkChunksToEntities(_graph: ExtractedGraph): Promise<void> {}
+  async deleteChunksByDocumentId(_id: string, _tenantId?: string, _libraryId?: string): Promise<void> {}
 }
 
 // ── Mock EmbeddingPort ─────────────────────────────────────────
@@ -373,7 +323,6 @@ export async function createTestApp(overrides?: {
       HealthController,
       DocumentsController,
       QueryController,
-      OutboxController,
       IndexController,
     ],
     providers: [
@@ -382,6 +331,7 @@ export async function createTestApp(overrides?: {
       GenerateDocumentUseCase,
       ReindexChunksUseCase,
       GraphRagQueryUseCase,
+      SummarizeUseCase,
       SimpleChunkerService,
       PromptTemplateService,
       ChecksumService,
@@ -400,20 +350,6 @@ export async function createTestApp(overrides?: {
       { provide: DOCUMENT_GENERATOR_PORT, useValue: new MockDocumentGenerator() },
       { provide: FILE_TEXT_EXTRACTOR_PORT, useValue: new MockFileTextExtractor() },
       { provide: MongoDatabaseService, useValue: new MockMongoDatabaseService() },
-      {
-        provide: GraphSyncRetryService,
-        useFactory: (docRepo: DocumentRepositoryPort, gs: GraphStorePort) => {
-          const service = Object.create(GraphSyncRetryService.prototype);
-          service.documentRepository = docRepo;
-          service.graphStore = gs;
-          service.logger = { log: () => {}, error: () => {}, warn: () => {} };
-          service.retry = GraphSyncRetryService.prototype.retry.bind(service);
-          service.onModuleInit = () => {};
-          service.onModuleDestroy = () => {};
-          return service;
-        },
-        inject: [DOCUMENT_REPOSITORY, GRAPH_STORE_PORT],
-      },
     ],
   }).compile();
 

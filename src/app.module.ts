@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Inject, Logger, Module, OnModuleInit } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -22,7 +22,10 @@ import {
 import { MongoDocumentRepository } from './modules/documents/infrastructure/mongo/mongo-document.repository';
 import { MongoChunkSearchAdapter } from './modules/search/infrastructure/mongo/mongo-chunk-search.adapter';
 import { ElasticsearchChunkSearchAdapter } from './modules/search/infrastructure/elasticsearch/elasticsearch-chunk-search.adapter';
+import { Neo4jConnectionService } from './modules/graph/infrastructure/neo4j/neo4j-connection.service';
 import { Neo4jGraphStoreAdapter } from './modules/graph/infrastructure/neo4j/neo4j-graph-store.adapter';
+import { GraphStorePort } from './modules/graph/domain/ports/graph-store.port';
+import { Neo4jChunkSearchAdapter } from './modules/search/infrastructure/neo4j/neo4j-chunk-search.adapter';
 import { IngestDocumentUseCase } from './modules/ingestion/application/ingest-document.usecase';
 import { DeleteDocumentUseCase } from './modules/documents/application/delete-document.usecase';
 import { GenerateDocumentUseCase } from './modules/documents/application/generate-document.usecase';
@@ -44,8 +47,6 @@ import { OpenAiAnswerGeneratorAdapter } from './modules/query/infrastructure/ope
 import { AnthropicAnswerGeneratorAdapter } from './modules/query/infrastructure/anthropic/anthropic-answer-generator.adapter';
 import { PromptTemplateService } from './modules/query/application/prompt-template.service';
 import { QueryController } from './modules/query/presentation/query.controller';
-import { GraphSyncRetryService } from './modules/ingestion/application/graph-sync-retry.service';
-import { OutboxController } from './modules/ingestion/presentation/outbox.controller';
 import { IndexController } from './modules/index/presentation/index.controller';
 import { ApiKeyGuard } from './common/guards/api-key.guard';
 import { RequireApiKey } from './common/decorators/require-api-key.decorator';
@@ -95,11 +96,11 @@ import { StructuredLogger } from './common/logger/structured-logger.service';
     HealthController,
     DocumentsController,
     QueryController,
-    OutboxController,
     IndexController,
   ],
   providers: [
     MongoDatabaseService,
+    Neo4jConnectionService,
     ApiKeyGuard,
     FileUploadInterceptor,
     ChecksumService,
@@ -127,11 +128,11 @@ import { StructuredLogger } from './common/logger/structured-logger.service';
     ReindexChunksUseCase,
     GraphRagQueryUseCase,
     SummarizeUseCase,
-    GraphSyncRetryService,
     SimpleChunkerService,
     PromptTemplateService,
     MongoChunkSearchAdapter,
     ElasticsearchChunkSearchAdapter,
+    Neo4jChunkSearchAdapter,
     DefaultFileTextExtractorAdapter,
     TemplateDocumentGeneratorAdapter,
     LocalAnswerGeneratorAdapter,
@@ -152,16 +153,24 @@ import { StructuredLogger } from './common/logger/structured-logger.service';
     },
     {
       provide: CHUNK_SEARCH_PORT,
-      inject: [ConfigService, MongoChunkSearchAdapter, ElasticsearchChunkSearchAdapter],
+      inject: [ConfigService, MongoChunkSearchAdapter, ElasticsearchChunkSearchAdapter, Neo4jChunkSearchAdapter],
       useFactory: (
         configService: ConfigService<BrainConfig>,
         mongoAdapter: MongoChunkSearchAdapter,
         elasticAdapter: ElasticsearchChunkSearchAdapter,
+        neo4jAdapter: Neo4jChunkSearchAdapter,
       ) => {
-        const searchEngine = configService.get<'mongo' | 'elasticsearch'>('app.searchEngine', {
+        const searchEngine = configService.get<'mongo' | 'elasticsearch' | 'neo4j'>('app.searchEngine', {
           infer: true,
         });
-        return searchEngine === 'elasticsearch' ? elasticAdapter : mongoAdapter;
+        switch (searchEngine) {
+          case 'elasticsearch':
+            return elasticAdapter;
+          case 'neo4j':
+            return neo4jAdapter;
+          default:
+            return mongoAdapter;
+        }
       },
     },
     {
@@ -241,4 +250,22 @@ import { StructuredLogger } from './common/logger/structured-logger.service';
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements OnModuleInit {
+  private readonly logger = new Logger(AppModule.name);
+
+  constructor(
+    private readonly configService: ConfigService<BrainConfig>,
+    @Inject(GRAPH_STORE_PORT)
+    private readonly graphStore: GraphStorePort,
+  ) {}
+
+  async onModuleInit(): Promise<void> {
+    const searchEngine = this.configService.get('app.searchEngine', { infer: true });
+    if (searchEngine === 'neo4j') {
+      this.logger.log('Initializing Neo4j vector index for chunk embeddings...');
+      // 768 = nomic-embed-text default dimensions; will adapt if model changes
+      await this.graphStore.ensureVectorIndex(768);
+      this.logger.log('Neo4j vector index ready.');
+    }
+  }
+}

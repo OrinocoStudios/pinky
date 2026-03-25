@@ -25,7 +25,6 @@ export class MongoDatabaseService implements OnModuleInit, OnModuleDestroy {
     const db = this.getDb();
     const documents = db.collection('documents');
     const chunks = db.collection('chunks');
-    const graphSyncOutbox = db.collection('graph_sync_outbox');
 
     await this.dropIndexIfExists(documents, 'tenantId_1_checksum_1');
 
@@ -47,10 +46,6 @@ export class MongoDatabaseService implements OnModuleInit, OnModuleDestroy {
     await chunks.createIndex({ tenantId: 1, documentId: 1 });
     await chunks.createIndex({ tenantId: 1, libraryId: 1, documentId: 1 });
     await chunks.createIndex({ libraryId: 1, documentId: 1 });
-
-    await graphSyncOutbox.createIndex({ status: 1, attempts: 1, updatedAt: 1 });
-    await graphSyncOutbox.createIndex({ tenantId: 1, libraryId: 1, status: 1, attempts: 1, updatedAt: 1 });
-    await graphSyncOutbox.createIndex({ documentId: 1 });
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -65,10 +60,6 @@ export class MongoDatabaseService implements OnModuleInit, OnModuleDestroy {
 
   get chunksCollection() {
     return this.getDb().collection('chunks');
-  }
-
-  get graphSyncOutboxCollection() {
-    return this.getDb().collection('graph_sync_outbox');
   }
 
   async ping(): Promise<number> {

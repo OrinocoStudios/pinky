@@ -2,7 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import { createTestApp, InMemoryDocumentRepository } from './test-helpers';
 
-describe('Outbox & Index (e2e)', () => {
+describe('Index (e2e)', () => {
   let app: INestApplication;
   let repo: InMemoryDocumentRepository;
 
@@ -16,61 +16,6 @@ describe('Outbox & Index (e2e)', () => {
 
   beforeEach(() => {
     repo.reset();
-  });
-
-  // ── POST /outbox/retry ───────────────────────────────────────
-
-  describe('POST /outbox/retry', () => {
-    it('should return zero counts when no pending events', async () => {
-      const res = await request(app.getHttpServer())
-        .post('/outbox/retry')
-        .send({ limit: 5 })
-        .expect(201);
-
-      expect(res.body.processed).toBe(0);
-      expect(res.body.synced).toBe(0);
-      expect(res.body.failed).toBe(0);
-    });
-
-    it('should process pending outbox events', async () => {
-      // Manually add a pending outbox event
-      repo.outboxEvents.push({
-        eventId: 'evt-test-1',
-        documentId: 'doc-1',
-        payload: JSON.stringify({ sourceDocumentId: 'doc-1', entities: [], relationships: [] }),
-        status: 'PENDING',
-        attempts: 0,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-      // Also add a document record for the status update
-      repo.documents.push({
-        documentId: 'doc-1',
-        status: 'ERROR',
-        graphSyncStatus: 'FAILED',
-        source: { kind: 'generated', useCaseId: 'test' },
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-
-      const res = await request(app.getHttpServer())
-        .post('/outbox/retry')
-        .send({ limit: 10 })
-        .expect(201);
-
-      expect(res.body.processed).toBe(1);
-      expect(res.body.synced).toBe(1);
-      expect(res.body.failed).toBe(0);
-    });
-
-    it('should accept empty body (defaults)', async () => {
-      const res = await request(app.getHttpServer())
-        .post('/outbox/retry')
-        .send({})
-        .expect(201);
-
-      expect(res.body.processed).toBe(0);
-    });
   });
 
   // ── POST /index/rebuild ──────────────────────────────────────

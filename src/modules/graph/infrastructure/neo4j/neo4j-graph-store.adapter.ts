@@ -1,37 +1,18 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Driver, Session, auth, driver as neo4jDriver } from 'neo4j-driver';
-import { GraphStorePort } from '../../domain/ports/graph-store.port';
+import { Injectable } from '@nestjs/common';
+import { GraphStorePort, ChunkWithEmbedding } from '../../domain/ports/graph-store.port';
 import { ExtractedGraph, GraphEntity, GraphRelationship } from '../../domain/models/graph.model';
-import { BrainConfig } from '../../../../config/configuration';
+import { Neo4jConnectionService } from './neo4j-connection.service';
 
 @Injectable()
-export class Neo4jGraphStoreAdapter implements GraphStorePort, OnModuleDestroy {
-  private readonly driver: Driver;
-
-  constructor(private readonly configService: ConfigService<BrainConfig>) {
-    const uri = this.configService.get<string>('neo4j.uri', { infer: true });
-    const user = this.configService.get<string>('neo4j.user', { infer: true });
-    const password = this.configService.get<string>('neo4j.password', { infer: true });
-
-    if (!uri || !user || !password) {
-      throw new Error('Neo4j config is missing');
-    }
-
-    this.driver = neo4jDriver(uri, auth.basic(user, password));
-  }
+export class Neo4jGraphStoreAdapter implements GraphStorePort {
+  constructor(private readonly neo4j: Neo4jConnectionService) {}
 
   async ping(): Promise<void> {
-    const session = this.createSession();
-    try {
-      await session.run('RETURN 1');
-    } finally {
-      await session.close();
-    }
+    await this.neo4j.ping();
   }
 
   async upsertGraph(graph: ExtractedGraph, tenantId?: string, libraryId?: string): Promise<void> {
-    const session = this.createSession();
+    const session = this.neo4j.getSession();
     try {
       const now = new Date().toISOString();
       if (graph.sourceDocumentId) {
@@ -130,7 +111,7 @@ export class Neo4jGraphStoreAdapter implements GraphStorePort, OnModuleDestroy {
     }
     const normalizedLibraryIds = this.normalizeLibraryIds(libraryIds);
 
-    const session = this.createSession();
+    const session = this.neo4j.getSession();
     try {
       const result = await session.run(
         `
@@ -170,7 +151,7 @@ export class Neo4jGraphStoreAdapter implements GraphStorePort, OnModuleDestroy {
     }
     const normalizedLibraryIds = this.normalizeLibraryIds(libraryIds);
 
-    const session = this.createSession();
+    const session = this.neo4j.getSession();
     try {
       const result = await session.run(
         `
@@ -206,7 +187,7 @@ export class Neo4jGraphStoreAdapter implements GraphStorePort, OnModuleDestroy {
   }
 
   async deleteByDocumentId(documentId: string, tenantId?: string, libraryId?: string): Promise<void> {
-    const session = this.createSession();
+    const session = this.neo4j.getSession();
     try {
       const tenantFilter = tenantId ? ' AND d.tenantId = $tenantId' : '';
       const libraryFilter = libraryId ? ' AND d.libraryId = $libraryId' : '';
@@ -237,17 +218,120 @@ export class Neo4jGraphStoreAdapter implements GraphStorePort, OnModuleDestroy {
         `,
         { documentId, tenantId: tenantId ?? null, libraryId: libraryId ?? null },
       );
+      // Also delete associated Chunk nodes
+      await session.run(
+        `
+        MATCH (c:Chunk {documentId: $documentId})
+        DETACH DELETE c
+        `,
+        { documentId },
+      );
     } finally {
       await session.close();
     }
   }
 
-  private createSession(): Session {
-    return this.driver.session();
+  async ensureVectorIndex(dimensions: number): Promise<void> {
+    const session = this.neo4j.getSession();
+    try {
+      await session.run(
+        `CREATE VECTOR INDEX chunk_embedding_index IF NOT EXISTS
+         FOR (c:Chunk) ON (c.embedding)
+         OPTIONS {indexConfig: {
+           \`vector.dimensions\`: $dimensions,
+           \`vector.similarity_function\`: 'cosine'
+         }}`,
+        { dimensions },
+      );
+    } finally {
+      await session.close();
+    }
   }
 
-  async onModuleDestroy(): Promise<void> {
-    await this.driver.close();
+  async saveChunks(
+    chunks: ChunkWithEmbedding[],
+    tenantId?: string,
+    libraryId?: string,
+  ): Promise<void> {
+    if (chunks.length === 0) return;
+
+    const session = this.neo4j.getSession();
+    try {
+      for (const chunk of chunks) {
+        await session.run(
+          `
+          MERGE (c:Chunk {chunkId: $chunkId})
+          SET c.documentId = $documentId,
+              c.tenantId   = $tenantId,
+              c.libraryId  = $libraryId,
+              c.seq        = $seq,
+              c.text       = $text,
+              c.embedding  = $embedding,
+              c.embeddingModel = $embeddingModel,
+              c.updatedAt  = $updatedAt
+          WITH c
+          MATCH (d:Document {documentId: $documentId})
+          MERGE (d)-[:HAS_CHUNK]->(c)
+          `,
+          {
+            chunkId: chunk.chunkId,
+            documentId: chunk.documentId,
+            tenantId: tenantId ?? chunk.tenantId ?? null,
+            libraryId: libraryId ?? chunk.libraryId ?? null,
+            seq: chunk.seq,
+            text: chunk.text,
+            embedding: chunk.embedding,
+            embeddingModel: chunk.embeddingModel,
+            updatedAt: new Date().toISOString(),
+          },
+        );
+      }
+    } finally {
+      await session.close();
+    }
+  }
+
+  async linkChunksToEntities(extractedGraph: ExtractedGraph): Promise<void> {
+    const session = this.neo4j.getSession();
+    try {
+      for (const entity of extractedGraph.entities) {
+        const sourceChunkId = entity.attributes?.sourceChunkId as string | undefined;
+        if (!sourceChunkId) continue;
+
+        await session.run(
+          `
+          MATCH (c:Chunk {chunkId: $chunkId})
+          MATCH (e:Entity {entityId: $entityId})
+          MERGE (c)-[:MENTIONS]->(e)
+          `,
+          { chunkId: sourceChunkId, entityId: entity.entityId },
+        );
+      }
+    } finally {
+      await session.close();
+    }
+  }
+
+  async deleteChunksByDocumentId(
+    documentId: string,
+    tenantId?: string,
+    libraryId?: string,
+  ): Promise<void> {
+    const session = this.neo4j.getSession();
+    try {
+      const tenantFilter = tenantId ? ' AND c.tenantId = $tenantId' : '';
+      const libraryFilter = libraryId ? ' AND c.libraryId = $libraryId' : '';
+      await session.run(
+        `
+        MATCH (c:Chunk {documentId: $documentId})
+        WHERE 1=1${tenantFilter}${libraryFilter}
+        DETACH DELETE c
+        `,
+        { documentId, tenantId: tenantId ?? null, libraryId: libraryId ?? null },
+      );
+    } finally {
+      await session.close();
+    }
   }
 
   private normalizeLibraryIds(libraryIds?: string[]): string[] {

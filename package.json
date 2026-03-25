@@ -9,7 +9,7 @@
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
     "lint": "eslint \"src/**/*.ts\"",
-    "test": "jest",
+    "test": "jest --config jest.config.ts",
     "test:e2e": "jest --config jest-e2e.config.ts",
     "test:ci": "jest --config jest-e2e.config.ts --ci --forceExit",
     "reindex": "node dist/scripts/reindex-chunks.js"

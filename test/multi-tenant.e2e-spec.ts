@@ -86,9 +86,8 @@ describe('Multi-tenant (e2e)', () => {
     expect(docsA.body[0].documentId).toBe(created.body.documentId);
   });
 
-  it('requires X-Tenant-Id on index and outbox endpoints when enabled', async () => {
+  it('requires X-Tenant-Id on index endpoints when enabled', async () => {
     await request(app.getHttpServer()).post('/index/rebuild').send({ limit: 10 }).expect(400);
-    await request(app.getHttpServer()).post('/outbox/retry').send({ limit: 10 }).expect(400);
   });
 
   it('reindexes only chunks of the requested tenant', async () => {
@@ -122,39 +121,5 @@ describe('Multi-tenant (e2e)', () => {
     ).toBe(true);
   });
 
-  it('retries outbox events only for requested tenant', async () => {
-    repo.outboxEvents.push(
-      {
-        eventId: 'evt-a',
-        documentId: 'doc-a',
-        tenantId: 'tenant-a',
-        payload: JSON.stringify({ sourceDocumentId: 'doc-a', entities: [], relationships: [] }),
-        status: 'PENDING',
-        attempts: 0,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-      {
-        eventId: 'evt-b',
-        documentId: 'doc-b',
-        tenantId: 'tenant-b',
-        payload: JSON.stringify({ sourceDocumentId: 'doc-b', entities: [], relationships: [] }),
-        status: 'PENDING',
-        attempts: 0,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-    );
-
-    const res = await request(app.getHttpServer())
-      .post('/outbox/retry')
-      .set('X-Tenant-Id', 'tenant-a')
-      .send({ limit: 5 })
-      .expect(201);
-
-    expect(res.body.processed).toBe(1);
-    expect(repo.outboxEvents.find((e) => e.eventId === 'evt-a')?.status).toBe('SYNCED');
-    expect(repo.outboxEvents.find((e) => e.eventId === 'evt-b')?.status).toBe('PENDING');
-  });
 });
 

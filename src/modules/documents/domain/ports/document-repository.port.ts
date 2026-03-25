@@ -1,5 +1,4 @@
-import { DocumentChunk, DocumentRecord, GraphSyncOutboxEvent } from '../models/document.model';
-import { ExtractedGraph } from '../../../graph/domain/models/graph.model';
+import { DocumentChunk, DocumentRecord } from '../models/document.model';
 
 export interface DocumentRepositoryPort {
   createDocument(input: Omit<DocumentRecord, 'createdAt' | 'updatedAt'>): Promise<DocumentRecord>;
@@ -30,20 +29,5 @@ export interface DocumentRepositoryPort {
     tenantId?: string,
     libraryId?: string,
   ): Promise<DocumentRecord | null>;
-  enqueueGraphSyncEvent(
-    documentId: string,
-    graph: ExtractedGraph,
-    tenantId?: string,
-    libraryId?: string,
-  ): Promise<GraphSyncOutboxEvent>;
-  claimAndGetNextRetryableEvent(
-    tenantId?: string,
-    libraryId?: string,
-  ): Promise<GraphSyncOutboxEvent | null>;
-  markGraphSyncEvent(
-    eventId: string,
-    status: GraphSyncOutboxEvent['status'],
-    details?: { attempts?: number; lastError?: string },
-  ): Promise<void>;
   deleteDocument(documentId: string): Promise<void>;
 }

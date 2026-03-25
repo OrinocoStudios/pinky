@@ -113,22 +113,14 @@ export class IngestDocumentUseCase {
         })),
       );
       await this.documentRepository.addChunks(chunksWithEmbeddings);
+      await this.graphStore.saveChunks(chunksWithEmbeddings, input.tenantId, input.libraryId);
       await this.documentRepository.updateDocumentStatus(documentId, 'EMBEDDED', 'PENDING');
 
       const chunkInputs = chunks.map((c) => ({ chunkId: c.chunkId, text: c.text }));
       const extractedGraph = await this.graphExtractor.extract(documentId, chunkInputs);
-      const syncEvent = await this.documentRepository.enqueueGraphSyncEvent(
-        documentId,
-        extractedGraph,
-        input.tenantId,
-        input.libraryId,
-      );
       await this.graphStore.upsertGraph(extractedGraph, input.tenantId, input.libraryId);
+      await this.graphStore.linkChunksToEntities(extractedGraph);
       await this.documentRepository.updateDocumentStatus(documentId, 'READY', 'SYNCED');
-      await this.documentRepository.markGraphSyncEvent(syncEvent.eventId, 'SYNCED', {
-        attempts: 1,
-        lastError: '',
-      });
       this.documentsIngestedCounter.inc();
     } catch (error) {
       await this.documentRepository.updateDocumentStatus(documentId, 'ERROR', 'FAILED');

@@ -16,7 +16,7 @@ export type AppConfig = {
    * If empty and CORS is enabled, the server will echo/allow origins dynamically.
    */
   corsOrigins: string[];
-  searchEngine: 'mongo' | 'elasticsearch';
+  searchEngine: 'mongo' | 'elasticsearch' | 'neo4j';
   objectStorePath: string;
   topK: number;
   chunkSize: number;
@@ -97,7 +97,7 @@ export default (): BrainConfig => ({
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean),
-    searchEngine: (process.env.SEARCH_ENGINE ?? 'mongo') as 'mongo' | 'elasticsearch',
+    searchEngine: (process.env.SEARCH_ENGINE ?? 'mongo') as 'mongo' | 'elasticsearch' | 'neo4j',
     objectStorePath: process.env.OBJECT_STORE_PATH ?? './data/objects',
     topK: Number(process.env.TOP_K ?? 8),
     chunkSize: Number(process.env.CHUNK_SIZE ?? 1200),

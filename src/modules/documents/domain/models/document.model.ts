@@ -56,23 +56,3 @@ export interface DocumentChunk {
   endOffset?: number;
   createdAt: string;
 }
-
-export type OutboxEventStatus = 'PENDING' | 'PROCESSING' | 'FAILED' | 'SYNCED' | 'DEAD_LETTER';
-
-export interface GraphSyncOutboxEvent {
-  eventId: string;
-  documentId: string;
-  tenantId?: string;
-  libraryId?: string;
-  payload: string; // JSON-serialized ExtractedGraph
-  status: OutboxEventStatus;
-  attempts: number;
-  lastError?: string;
-  lockExpiresAt?: string; // ISO timestamp, for concurrent claim locking
-  createdAt: string;
-  updatedAt: string;
-  /** Set when event is claimed for processing (atomic locking) */
-  claimedAt?: string;
-  /** Instance/pod ID that claimed the event */
-  claimedBy?: string;
-}

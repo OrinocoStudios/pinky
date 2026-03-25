@@ -1,9 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DocumentRepositoryPort } from '../../domain/ports/document-repository.port';
-import { DocumentChunk, DocumentRecord, GraphSyncOutboxEvent } from '../../domain/models/document.model';
+import { DocumentChunk, DocumentRecord } from '../../domain/models/document.model';
 import { MongoDatabaseService } from './mongo-database.service';
-import { ExtractedGraph } from '../../../graph/domain/models/graph.model';
-import { randomUUID } from 'node:crypto';
 
 @Injectable()
 export class MongoDocumentRepository implements DocumentRepositoryPort {
@@ -133,84 +131,8 @@ export class MongoDocumentRepository implements DocumentRepositoryPort {
     return (await this.db.documentsCollection.findOne(filter)) as DocumentRecord | null;
   }
 
-  async enqueueGraphSyncEvent(
-    documentId: string,
-    graph: ExtractedGraph,
-    tenantId?: string,
-    libraryId?: string,
-  ): Promise<GraphSyncOutboxEvent> {
-    const now = new Date().toISOString();
-    const event: GraphSyncOutboxEvent = {
-      eventId: randomUUID(),
-      documentId,
-      tenantId,
-      libraryId,
-      payload: JSON.stringify(graph),
-      status: 'PENDING',
-      attempts: 0,
-      createdAt: now,
-      updatedAt: now,
-    };
-    await this.db.graphSyncOutboxCollection.insertOne(event);
-    return event;
-  }
-
-  async claimAndGetNextRetryableEvent(
-    tenantId?: string,
-    libraryId?: string,
-  ): Promise<GraphSyncOutboxEvent | null> {
-    const now = new Date();
-    const nowIso = now.toISOString();
-    const lockExpiresAt = new Date(now.getTime() + 2 * 60 * 1000).toISOString();
-    const scopeFilter = this.buildScopeFilter(tenantId, libraryId);
-    const result = await this.db.graphSyncOutboxCollection.findOneAndUpdate(
-      {
-        ...scopeFilter,
-        status: { $in: ['PENDING', 'FAILED'] },
-        attempts: { $lt: 10 },
-        $or: [
-          { lockExpiresAt: { $exists: false } },
-          { lockExpiresAt: null },
-          { lockExpiresAt: { $lt: nowIso } },
-        ],
-      },
-      {
-        $set: {
-          status: 'PROCESSING',
-          updatedAt: nowIso,
-          lockExpiresAt,
-        },
-        $inc: { attempts: 1 },
-      },
-      { sort: { updatedAt: 1 }, returnDocument: 'after' },
-    );
-    return result as unknown as GraphSyncOutboxEvent | null;
-  }
-
-  async markGraphSyncEvent(
-    eventId: string,
-    status: GraphSyncOutboxEvent['status'],
-    details?: { attempts?: number; lastError?: string },
-  ): Promise<void> {
-    const now = new Date().toISOString();
-    const update: Record<string, unknown> = {
-      $set: {
-        status,
-        updatedAt: now,
-        ...(details?.attempts !== undefined ? { attempts: details.attempts } : {}),
-        ...(details?.lastError !== undefined ? { lastError: details.lastError } : {}),
-      },
-    };
-    // Clear lock when done (SYNCED, FAILED, DEAD_LETTER) so retries can reclaim
-    if (status !== 'PENDING') {
-      (update as { $unset?: Record<string, number> }).$unset = { lockExpiresAt: 1 };
-    }
-    await this.db.graphSyncOutboxCollection.updateOne({ eventId }, update);
-  }
-
   async deleteDocument(documentId: string): Promise<void> {
     await this.db.chunksCollection.deleteMany({ documentId });
-    await this.db.graphSyncOutboxCollection.deleteMany({ documentId });
     await this.db.documentsCollection.deleteOne({ documentId });
   }
 
