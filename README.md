@@ -41,6 +41,7 @@ Opcional: `REINDEX_LIMIT=100 yarn reindex` para limitar chunks procesados.
 ## Endpoints
 
 - `GET /health`
+- `POST /summarize` (body: `{ messages: [{role, content}] }`) - Genera resúmenes clínicos de sesiones de chat.
 - `POST /documents/text`
 - `POST /documents/upload` (multipart `file`, soporta `txt/md/json/csv/pdf/docx`)
 - `POST /documents/generate` (body: `{ useCaseId, title?, params? }`)

@@ -32,7 +32,7 @@ export type AppConfig = {
 };
 
 export type LlmConfig = {
-  provider: 'local' | 'openai' | 'anthropic';
+  provider: 'local' | 'openai' | 'anthropic' | 'ollama';
   openai: {
     apiKey: string;
     model: string;
@@ -68,6 +68,10 @@ export type OllamaConfig = {
   baseUrl: string;
   embeddingModel: string;
   extractionModel: string;
+  aiModel: string;
+  apiKey?: string;
+  temperature: number;
+  maxTokens: number;
   timeoutMs: number;
 };
 
@@ -123,10 +127,14 @@ export default (): BrainConfig => ({
     baseUrl: process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434',
     embeddingModel: process.env.OLLAMA_EMBEDDING_MODEL ?? 'nomic-embed-text',
     extractionModel: process.env.OLLAMA_EXTRACTION_MODEL ?? 'llama3.2',
+    aiModel: process.env.OLLAMA_AI_MODEL ?? 'llama3.2',
+    apiKey: process.env.OLLAMA_API_KEY,
+    temperature: Number(process.env.OLLAMA_TEMPERATURE ?? 0.2),
+    maxTokens: Number(process.env.OLLAMA_MAX_TOKENS ?? 1000),
     timeoutMs: Number(process.env.OLLAMA_TIMEOUT_MS ?? 60000),
   },
   llm: {
-    provider: (process.env.LLM_PROVIDER ?? 'local') as 'local' | 'openai' | 'anthropic',
+    provider: (process.env.LLM_PROVIDER ?? 'local') as 'local' | 'openai' | 'anthropic' | 'ollama',
     openai: {
       apiKey: process.env.OPENAI_API_KEY ?? '',
       model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',

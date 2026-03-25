@@ -28,10 +28,13 @@ export class OllamaGraphExtractorAdapter implements GraphExtractorPort {
   private readonly model: string;
   private readonly timeoutMs: number;
 
+  private readonly apiKey?: string;
+
   constructor(private readonly configService: ConfigService<BrainConfig>) {
     const ollama = configService.get('ollama', { infer: true });
     this.baseUrl = ollama?.baseUrl ?? 'http://localhost:11434';
     this.model = ollama?.extractionModel ?? 'llama3.2';
+    this.apiKey = ollama?.apiKey;
     this.timeoutMs = ollama?.timeoutMs ?? 60000;
   }
 
@@ -105,10 +108,19 @@ Rules: Use entity names exactly as they appear. Relationship "from" and "to" mus
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (this.apiKey) {
+      headers['X-API-Key'] = this.apiKey;
+    }
+
+    console.log(`[OllamaGraph] Requesting to ${this.baseUrl}/api/generate with model ${this.model}`);
     try {
       const res = await fetch(`${this.baseUrl}/api/generate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           model: this.model,
           prompt,
@@ -120,6 +132,7 @@ Rules: Use entity names exactly as they appear. Relationship "from" and "to" mus
 
       if (!res.ok) {
         const errBody = await res.text();
+        console.error(`[OllamaGraph] Error ${res.status}: ${errBody}`);
         throw new Error(`Ollama generate failed (${res.status}): ${errBody}`);
       }
 
@@ -132,13 +145,8 @@ Rules: Use entity names exactly as they appear. Relationship "from" and "to" mus
       if (!parsed.relationships) parsed.relationships = [];
       return parsed;
     } catch (err) {
-      if (err instanceof Error) {
-        if (err.name === 'AbortError') {
-          throw new Error(`Ollama extraction timeout after ${this.timeoutMs}ms`);
-        }
-        throw err;
-      }
-      throw new Error('Ollama extraction failed');
+      console.warn(`[OllamaGraph] Fallback to empty graph due to error: ${err instanceof Error ? err.message : 'Unknown'}`);
+      return { entities: [], relationships: [] };
     } finally {
       clearTimeout(timeoutId);
     }

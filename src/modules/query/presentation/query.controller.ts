@@ -2,7 +2,9 @@ import { BadRequestException, Body, Controller, Headers, Logger, Post } from '@n
 import { Throttle } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
 import { GraphRagQueryUseCase } from '../application/graph-rag-query.usecase';
+import { SummarizeUseCase } from '../application/summarize.usecase';
 import { QueryDto, QueryResponseDto } from './query.dto';
+import { SummarizeDto, SummarizeResponseDto } from './summarize.dto';
 import { RequireApiKey } from '../../../common/decorators/require-api-key.decorator';
 import { BrainConfig } from '../../../config/configuration';
 
@@ -12,6 +14,7 @@ export class QueryController {
 
   constructor(
     private readonly graphRagQueryUseCase: GraphRagQueryUseCase,
+    private readonly summarizeUseCase: SummarizeUseCase,
     private readonly configService: ConfigService<BrainConfig>,
   ) {}
 
@@ -48,6 +51,15 @@ export class QueryController {
       tokensUsed: result.tokensUsed,
       prompt: result.prompt,
     };
+  }
+
+  @Post('summarize')
+  @RequireApiKey()
+  async summarize(@Body() body: SummarizeDto): Promise<SummarizeResponseDto> {
+    const summary = await this.summarizeUseCase.execute({
+      messages: body.messages,
+    });
+    return { summary };
   }
 
   private resolveTenantId(rawTenantId?: string): string | undefined {

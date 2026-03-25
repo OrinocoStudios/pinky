@@ -85,11 +85,18 @@ export class MongoDatabaseService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async dropIndexIfExists(
-    collection: { indexExists(name: string): Promise<boolean>; dropIndex(name: string): Promise<unknown> },
+    collection: any,
     indexName: string,
   ): Promise<void> {
-    if (await collection.indexExists(indexName)) {
-      await collection.dropIndex(indexName);
+    try {
+      if (await collection.indexExists(indexName)) {
+        await collection.dropIndex(indexName);
+      }
+    } catch (error: any) {
+      if (error.codeName === 'NamespaceNotFound' || error.code === 26) {
+        return;
+      }
+      throw error;
     }
   }
 }
