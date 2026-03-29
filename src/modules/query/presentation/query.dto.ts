@@ -23,6 +23,10 @@ export class QueryDto {
 export class ChunkSourceDto {
   id!: string;
   text!: string;
+  documentId?: string;
+  title?: string;
+  libraryId?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export class GraphFactDto {

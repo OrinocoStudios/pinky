@@ -1,12 +1,18 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectMetric } from '@willsoto/nestjs-prometheus';
 import { Counter, Histogram } from 'prom-client';
-import { ANSWER_GENERATOR_PORT, CHUNK_SEARCH_PORT, GRAPH_STORE_PORT } from '../../../shared/di.tokens';
+import {
+  ANSWER_GENERATOR_PORT,
+  CHUNK_SEARCH_PORT,
+  DOCUMENT_REPOSITORY,
+  GRAPH_STORE_PORT,
+} from '../../../shared/di.tokens';
 import { ChunkSearchPort } from '../../search/domain/ports/chunk-search.port';
 import { GraphStorePort } from '../../graph/domain/ports/graph-store.port';
 import { AnswerGeneratorPort } from '../domain/ports/answer-generator.port';
 import { PromptTemplateService } from './prompt-template.service';
 import { StructuredLogger } from '../../../common/logger/structured-logger.service';
+import { DocumentRepositoryPort } from '../../documents/domain/ports/document-repository.port';
 
 export type GraphRagQueryInput = {
   tenantId?: string;
@@ -20,7 +26,14 @@ export type GraphRagQueryOutput = {
   prompt: string;
   answer: string;
   sourcesUsed: string[];
-  fastContext: Array<{ id: string; text: string }>;
+  fastContext: Array<{
+    id: string;
+    text: string;
+    documentId?: string;
+    title?: string;
+    libraryId?: string;
+    metadata?: Record<string, unknown>;
+  }>;
   truthFacts: Array<{ id: string; from: string; relation: string; to: string }>;
   model?: string;
   tokensUsed?: number;
@@ -31,6 +44,8 @@ export class GraphRagQueryUseCase {
   constructor(
     @Inject(CHUNK_SEARCH_PORT)
     private readonly chunkSearch: ChunkSearchPort,
+    @Inject(DOCUMENT_REPOSITORY)
+    private readonly documentRepository: DocumentRepositoryPort,
     @Inject(GRAPH_STORE_PORT)
     private readonly graphStore: GraphStorePort,
     @Inject(ANSWER_GENERATOR_PORT)
@@ -58,6 +73,18 @@ export class GraphRagQueryUseCase {
         queryText: input.query,
         topK: input.topK,
       });
+      const documentIds = [...new Set(chunks.map((chunk) => chunk.documentId).filter(Boolean))];
+      const documents = await Promise.all(
+        documentIds.map(async (documentId) => ({
+          documentId,
+          document: await this.documentRepository.findDocumentById(documentId),
+        })),
+      );
+      const documentMap = new Map(
+        documents
+          .filter((entry) => entry.document)
+          .map((entry) => [entry.documentId, entry.document]),
+      );
 
       this.logger.debug('Retrieved chunks for query', GraphRagQueryUseCase.name, {
         chunks: chunks.length,
@@ -80,9 +107,14 @@ export class GraphRagQueryUseCase {
       });
 
       // Step 3: Build grounded prompt with IDs
-      const contextSources = chunks.map((chunk, index) => ({
+      const contextSources = chunks.map((chunk) => ({
+        chunkId: chunk.chunkId,
         id: chunk.chunkId,
         text: chunk.text,
+        documentId: chunk.documentId,
+        title: documentMap.get(chunk.documentId)?.title,
+        libraryId: chunk.libraryId ?? documentMap.get(chunk.documentId)?.libraryId,
+        metadata: documentMap.get(chunk.documentId)?.metadata,
       }));
 
       const graphFacts = relations.map((rel) => ({
@@ -119,7 +151,14 @@ export class GraphRagQueryUseCase {
         prompt,
         answer: result.answer,
         sourcesUsed: result.sourcesUsed,
-        fastContext: contextSources,
+        fastContext: contextSources.map((source) => ({
+          id: source.id,
+          text: source.text,
+          documentId: source.documentId,
+          title: source.title,
+          libraryId: source.libraryId,
+          metadata: source.metadata,
+        })),
         truthFacts: graphFacts.map((f) => ({
           id: f.id,
           from: f.fromEntityId,

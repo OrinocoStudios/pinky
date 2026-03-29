@@ -7,11 +7,13 @@ import {
   GenerateAnswerOutput,
 } from '../../domain/ports/answer-generator.port';
 import { BrainConfig } from '../../../../config/configuration';
+import { createOpenAiClient } from '../../../../common/utils/openai-client';
 
 @Injectable()
 export class OpenAiAnswerGeneratorAdapter implements AnswerGeneratorPort {
   private readonly logger = new Logger(OpenAiAnswerGeneratorAdapter.name);
   private readonly client: OpenAI;
+  private readonly baseUrl?: string;
   private readonly model: string;
   private readonly temperature: number;
   private readonly maxTokens: number;
@@ -20,14 +22,8 @@ export class OpenAiAnswerGeneratorAdapter implements AnswerGeneratorPort {
   constructor(private readonly configService: ConfigService<BrainConfig>) {
     const llmConfig = this.configService.get('llm', { infer: true })!;
     const openaiConfig = llmConfig.openai;
-
-    this.client = openaiConfig.apiKey
-      ? new OpenAI({
-          apiKey: openaiConfig.apiKey,
-          timeout: openaiConfig.timeoutMs,
-          maxRetries: 3,
-        })
-      : (null as unknown as OpenAI);
+    this.client = createOpenAiClient(openaiConfig) as OpenAI;
+    this.baseUrl = openaiConfig.baseUrl;
 
     this.model = openaiConfig.model;
     this.temperature = openaiConfig.temperature;
@@ -35,13 +31,15 @@ export class OpenAiAnswerGeneratorAdapter implements AnswerGeneratorPort {
     this.timeoutMs = openaiConfig.timeoutMs;
 
     this.logger.log(
-      `Initialized OpenAI adapter with model=${this.model}, temperature=${this.temperature}, maxTokens=${this.maxTokens}`,
+      `Initialized OpenAI-compatible adapter with baseUrl=${this.baseUrl ?? 'https://api.openai.com/v1'}, model=${this.model}, temperature=${this.temperature}, maxTokens=${this.maxTokens}`,
     );
   }
 
   async generate(input: GenerateAnswerInput): Promise<GenerateAnswerOutput> {
     if (!this.client) {
-      throw new Error('OPENAI_API_KEY is required when LLM_PROVIDER=openai');
+      throw new Error(
+        'OPENAI_API_KEY is required when LLM_PROVIDER=openai unless OPENAI_BASE_URL points to an OpenAI-compatible gateway',
+      );
     }
     const startTime = Date.now();
 

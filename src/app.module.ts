@@ -39,6 +39,8 @@ import { SimpleChunkerService } from './modules/ingestion/application/simple-chu
 import { DefaultFileTextExtractorAdapter } from './modules/ingestion/infrastructure/extractors/default-file-text-extractor.adapter';
 import { OllamaEmbeddingAdapter } from './modules/ingestion/infrastructure/ollama/ollama-embedding.adapter';
 import { OllamaGraphExtractorAdapter } from './modules/ingestion/infrastructure/ollama/ollama-graph-extractor.adapter';
+import { OpenAiEmbeddingAdapter } from './modules/ingestion/infrastructure/openai/openai-embedding.adapter';
+import { OpenAiGraphExtractorAdapter } from './modules/ingestion/infrastructure/openai/openai-graph-extractor.adapter';
 import { OllamaAnswerGeneratorAdapter } from './modules/query/infrastructure/ollama/ollama-answer-generator.adapter';
 import { LocalAnswerGeneratorAdapter } from './modules/query/infrastructure/local/local-answer-generator.adapter';
 import { LocalEmbeddingAdapter } from './modules/ingestion/infrastructure/local/local-embedding.adapter';
@@ -140,6 +142,8 @@ import { StructuredLogger } from './common/logger/structured-logger.service';
     AnthropicAnswerGeneratorAdapter,
     LocalEmbeddingAdapter,
     LocalGraphExtractorAdapter,
+    OpenAiEmbeddingAdapter,
+    OpenAiGraphExtractorAdapter,
     OllamaEmbeddingAdapter,
     OllamaGraphExtractorAdapter,
     OllamaAnswerGeneratorAdapter,
@@ -218,30 +222,64 @@ import { StructuredLogger } from './common/logger/structured-logger.service';
     },
     {
       provide: EMBEDDING_PORT,
-      inject: [ConfigService, OllamaEmbeddingAdapter, LocalEmbeddingAdapter],
+      inject: [
+        ConfigService,
+        OllamaEmbeddingAdapter,
+        LocalEmbeddingAdapter,
+        OpenAiEmbeddingAdapter,
+      ],
       useFactory: (
         configService: ConfigService<BrainConfig>,
         ollamaAdapter: OllamaEmbeddingAdapter,
         localAdapter: LocalEmbeddingAdapter,
+        openaiAdapter: OpenAiEmbeddingAdapter,
       ) => {
-        const llmProvider = configService.get<'local' | 'openai' | 'anthropic'>('llm.provider', {
+        const llmProvider = configService.get<
+          'local' | 'openai' | 'anthropic' | 'ollama'
+        >('llm.provider', {
           infer: true,
         });
-        return llmProvider === 'local' ? localAdapter : ollamaAdapter;
+        switch (llmProvider) {
+          case 'local':
+            return localAdapter;
+          case 'openai':
+            return openaiAdapter;
+          case 'anthropic':
+          case 'ollama':
+          default:
+            return ollamaAdapter;
+        }
       },
     },
     {
       provide: GRAPH_EXTRACTOR_PORT,
-      inject: [ConfigService, OllamaGraphExtractorAdapter, LocalGraphExtractorAdapter],
+      inject: [
+        ConfigService,
+        OllamaGraphExtractorAdapter,
+        LocalGraphExtractorAdapter,
+        OpenAiGraphExtractorAdapter,
+      ],
       useFactory: (
         configService: ConfigService<BrainConfig>,
         ollamaAdapter: OllamaGraphExtractorAdapter,
         localAdapter: LocalGraphExtractorAdapter,
+        openaiAdapter: OpenAiGraphExtractorAdapter,
       ) => {
-        const llmProvider = configService.get<'local' | 'openai' | 'anthropic'>('llm.provider', {
+        const llmProvider = configService.get<
+          'local' | 'openai' | 'anthropic' | 'ollama'
+        >('llm.provider', {
           infer: true,
         });
-        return llmProvider === 'local' ? localAdapter : ollamaAdapter;
+        switch (llmProvider) {
+          case 'local':
+            return localAdapter;
+          case 'openai':
+            return openaiAdapter;
+          case 'anthropic':
+          case 'ollama':
+          default:
+            return ollamaAdapter;
+        }
       },
     },
     {

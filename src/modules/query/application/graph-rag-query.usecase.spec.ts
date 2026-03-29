@@ -6,12 +6,14 @@ import { StructuredLogger } from '../../../common/logger/structured-logger.servi
 import {
   ANSWER_GENERATOR_PORT,
   CHUNK_SEARCH_PORT,
+  DOCUMENT_REPOSITORY,
   GRAPH_STORE_PORT,
 } from '../../../shared/di.tokens';
 
 describe('GraphRagQueryUseCase', () => {
   let useCase: GraphRagQueryUseCase;
   let chunkSearch: Record<string, jest.Mock>;
+  let documentRepository: Record<string, jest.Mock>;
   let graphStore: Record<string, jest.Mock>;
   let answerGenerator: Record<string, jest.Mock>;
 
@@ -20,6 +22,17 @@ describe('GraphRagQueryUseCase', () => {
       hybridSearch: jest.fn().mockResolvedValue([
         { chunkId: 'c1', documentId: 'd1', seq: 0, text: 'Einstein developed relativity.', createdAt: '' },
       ]),
+    };
+    documentRepository = {
+      findDocumentById: jest.fn().mockResolvedValue({
+        documentId: 'd1',
+        title: 'Clinical note',
+        libraryId: 'patient:p1:medical_history',
+        metadata: {
+          engineDocumentId: 'engine-doc-1',
+          documentCategory: 'medical_history',
+        },
+      }),
     };
 
     graphStore = {
@@ -55,6 +68,7 @@ describe('GraphRagQueryUseCase', () => {
           useValue: { debug: jest.fn(), log: jest.fn(), error: jest.fn() },
         },
         { provide: CHUNK_SEARCH_PORT, useValue: chunkSearch },
+        { provide: DOCUMENT_REPOSITORY, useValue: documentRepository },
         { provide: GRAPH_STORE_PORT, useValue: graphStore },
         { provide: ANSWER_GENERATOR_PORT, useValue: answerGenerator },
         makeCounterProvider({ name: 'brain_queries_total', help: 'test' }),
@@ -89,6 +103,10 @@ describe('GraphRagQueryUseCase', () => {
 
     expect(result.fastContext).toHaveLength(1);
     expect(result.fastContext[0].text).toContain('Einstein');
+    expect(result.fastContext[0].documentId).toBe('d1');
+    expect(result.fastContext[0].metadata).toEqual(
+      expect.objectContaining({ engineDocumentId: 'engine-doc-1' }),
+    );
   });
 
   it('should include graph relations in truthFacts', async () => {

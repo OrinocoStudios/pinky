@@ -34,8 +34,11 @@ export type AppConfig = {
 export type LlmConfig = {
   provider: 'local' | 'openai' | 'anthropic' | 'ollama';
   openai: {
+    baseUrl?: string;
     apiKey: string;
     model: string;
+    embeddingModel: string;
+    extractionModel: string;
     temperature: number;
     maxTokens: number;
     timeoutMs: number;
@@ -136,8 +139,11 @@ export default (): BrainConfig => ({
   llm: {
     provider: (process.env.LLM_PROVIDER ?? 'local') as 'local' | 'openai' | 'anthropic' | 'ollama',
     openai: {
+      baseUrl: process.env.OPENAI_BASE_URL?.trim() || undefined,
       apiKey: process.env.OPENAI_API_KEY ?? '',
       model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
+      embeddingModel: process.env.OPENAI_EMBEDDING_MODEL ?? 'nomic-embed-text',
+      extractionModel: process.env.OPENAI_EXTRACTION_MODEL ?? process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
       temperature: Number(process.env.OPENAI_TEMPERATURE ?? 0.2),
       maxTokens: Number(process.env.OPENAI_MAX_TOKENS ?? 1000),
       timeoutMs: Number(process.env.OPENAI_TIMEOUT_MS ?? 30000),

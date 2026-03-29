@@ -4,6 +4,24 @@ Este registro resume cambios de implementación para mantener contexto operativo
 
 ---
 
+## 2026-03-29 (Clinical traceability contract for Convit MVP)
+
+### Added
+
+- Metadata documental enriquecida en `fastContext` de `POST /query`: `documentId`, `title`, `libraryId` y `metadata` para permitir que el engine resuelva el original clínico.
+- Documentación del contrato de respuesta actualizada en `docs/API_REFERENCE.md` para reflejar la trazabilidad consumida por el cliente clínico.
+
+### Changed
+
+- La integración con Convit ahora devuelve suficiente contexto estructurado para mapear chunks del brain a documentos del hospital sin inferencias adicionales en el frontend.
+- El servicio puede operar contra un gateway OpenAI-compatible remoto para respuestas, embeddings y extracción de grafo mediante `OPENAI_BASE_URL`.
+
+### Notes
+
+- El servicio sigue siendo agnóstico al dominio: el significado de `libraryId` y de la metadata clínica sigue definido por el engine.
+
+---
+
 ## 2026-03-21 (Library Scoping — libraryId)
 
 ### Added

@@ -334,7 +334,15 @@ X-API-Key: <key>
   "fastContext": [
     {
       "id": "4fc700f0-b779-443b-b696-3427c9d3749f",
-      "text": "Albert Einstein was a theoretical physicist..."
+      "text": "Albert Einstein was a theoretical physicist...",
+      "documentId": "9be3c836-d162-4daa-991f-1aea96b38cb8",
+      "title": "Einstein Bio",
+      "libraryId": "patient:abc123:medical_history",
+      "metadata": {
+        "engineDocumentId": "67f07a8f7672a58790be0421",
+        "patientId": "abc123",
+        "documentCategory": "medical_history"
+      }
     }
   ],
   "truthFacts": [
@@ -355,7 +363,7 @@ X-API-Key: <key>
 |-------|------|-------------|
 | `answer` | string | The generated answer with `[CTX-X]` and `[FACT-X]` citations |
 | `sourcesUsed` | string[] | IDs of sources actually cited in the answer |
-| `fastContext` | array | Text chunks retrieved from vector/text search |
+| `fastContext` | array | Text chunks retrieved from vector/text search, enriched with `documentId`, `title`, `libraryId` y `metadata` para trazabilidad aguas abajo |
 | `truthFacts` | array | Entity relationships retrieved from the knowledge graph |
 | `model` | string | LLM model used (e.g. `"gpt-4o-mini"`, `"claude-3-5-sonnet-20241022"`, `"local-deterministic"`) |
 | `tokensUsed` | number | Total tokens consumed (0 for local mode) |
