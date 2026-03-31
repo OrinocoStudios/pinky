@@ -6,6 +6,7 @@ import {
   CHUNK_SEARCH_PORT,
   DOCUMENT_REPOSITORY,
   GRAPH_STORE_PORT,
+  CHAT_HISTORY_REPOSITORY,
 } from '../../../shared/di.tokens';
 import { ChunkSearchPort } from '../../search/domain/ports/chunk-search.port';
 import { GraphStorePort } from '../../graph/domain/ports/graph-store.port';
@@ -13,6 +14,7 @@ import { AnswerGeneratorPort } from '../domain/ports/answer-generator.port';
 import { PromptTemplateService } from './prompt-template.service';
 import { StructuredLogger } from '../../../common/logger/structured-logger.service';
 import { DocumentRepositoryPort } from '../../documents/domain/ports/document-repository.port';
+import { ChatHistoryRepositoryPort } from '../domain/ports/chat-history.repository.port';
 
 export type GraphRagQueryInput = {
   tenantId?: string;
@@ -20,6 +22,7 @@ export type GraphRagQueryInput = {
   query: string;
   entityHints?: string[];
   topK: number;
+  sessionId?: string;
 };
 
 export type GraphRagQueryOutput = {
@@ -50,6 +53,8 @@ export class GraphRagQueryUseCase {
     private readonly graphStore: GraphStorePort,
     @Inject(ANSWER_GENERATOR_PORT)
     private readonly answerGenerator: AnswerGeneratorPort,
+    @Inject(CHAT_HISTORY_REPOSITORY)
+    private readonly chatHistory: ChatHistoryRepositoryPort,
     private readonly promptTemplate: PromptTemplateService,
     private readonly logger: StructuredLogger,
     @InjectMetric('brain_queries_total')
@@ -63,6 +68,17 @@ export class GraphRagQueryUseCase {
   async execute(input: GraphRagQueryInput): Promise<GraphRagQueryOutput> {
     const startTime = Date.now();
     this.queriesTotalCounter.inc();
+
+    // Persist user message if sessionId is present
+    if (input.sessionId) {
+      this.chatHistory.saveMessage({
+        sessionId: input.sessionId,
+        libraryId: input.libraryIds?.[0],
+        role: 'user',
+        content: input.query,
+      }).catch((err: any) => this.logger.error(`Failed to save user message: ${err.message}`));
+    }
+
     const libraryIds = this.normalizeLibraryIds(input.libraryIds);
 
     try {
@@ -73,17 +89,17 @@ export class GraphRagQueryUseCase {
         queryText: input.query,
         topK: input.topK,
       });
-      const documentIds = [...new Set(chunks.map((chunk) => chunk.documentId).filter(Boolean))];
+      const documentIds = [...new Set(chunks.map((chunk: any) => chunk.documentId).filter(Boolean))];
       const documents = await Promise.all(
-        documentIds.map(async (documentId) => ({
+        documentIds.map(async (documentId: string) => ({
           documentId,
           document: await this.documentRepository.findDocumentById(documentId),
         })),
       );
       const documentMap = new Map(
         documents
-          .filter((entry) => entry.document)
-          .map((entry) => [entry.documentId, entry.document]),
+          .filter((entry: any) => entry.document)
+          .map((entry: any) => [entry.documentId, entry.document]),
       );
 
       this.logger.debug('Retrieved chunks for query', GraphRagQueryUseCase.name, {
@@ -96,7 +112,7 @@ export class GraphRagQueryUseCase {
         : this.extractEntityHintsFromQuery(input.query);
       const entities = await this.graphStore.findEntitiesByNames(entityHints, input.tenantId, libraryIds);
       const relations = await this.graphStore.findRelationshipsForEntityIds(
-        entities.map((e) => e.entityId),
+        entities.map((e: any) => e.entityId),
         input.tenantId,
         libraryIds,
       );
@@ -107,7 +123,7 @@ export class GraphRagQueryUseCase {
       });
 
       // Step 3: Build grounded prompt with IDs
-      const contextSources = chunks.map((chunk) => ({
+      const contextSources = chunks.map((chunk: any) => ({
         chunkId: chunk.chunkId,
         id: chunk.chunkId,
         text: chunk.text,
@@ -117,7 +133,7 @@ export class GraphRagQueryUseCase {
         metadata: documentMap.get(chunk.documentId)?.metadata,
       }));
 
-      const graphFacts = relations.map((rel) => ({
+      const graphFacts = relations.map((rel: any) => ({
         id: rel.sourceChunkId,
         fromEntityId: rel.fromEntityId,
         type: rel.type,
@@ -138,6 +154,16 @@ export class GraphRagQueryUseCase {
         maxTokens: undefined, // Use default from config
       });
 
+      // Persist assistant message if sessionId is present
+      if (input.sessionId) {
+        this.chatHistory.saveMessage({
+          sessionId: input.sessionId,
+          libraryId: input.libraryIds?.[0],
+          role: 'assistant',
+          content: result.answer,
+        }).catch((err: any) => this.logger.error(`Failed to save assistant message: ${err.message}`));
+      }
+
       const latency = Date.now() - startTime;
       this.queryLatencyHistogram.observe(latency);
       this.logger.log('GraphRAG query completed', GraphRagQueryUseCase.name, {
@@ -151,7 +177,7 @@ export class GraphRagQueryUseCase {
         prompt,
         answer: result.answer,
         sourcesUsed: result.sourcesUsed,
-        fastContext: contextSources.map((source) => ({
+        fastContext: contextSources.map((source: any) => ({
           id: source.id,
           text: source.text,
           documentId: source.documentId,
@@ -159,7 +185,7 @@ export class GraphRagQueryUseCase {
           libraryId: source.libraryId,
           metadata: source.metadata,
         })),
-        truthFacts: graphFacts.map((f) => ({
+        truthFacts: graphFacts.map((f: any) => ({
           id: f.id,
           from: f.fromEntityId,
           relation: f.type,
@@ -168,7 +194,7 @@ export class GraphRagQueryUseCase {
         model: result.model,
         tokensUsed: result.tokensUsed,
       };
-    } catch (error) {
+    } catch (error: any) {
       const latency = Date.now() - startTime;
       this.queryErrorsCounter.inc();
       this.queryLatencyHistogram.observe(latency);

@@ -48,17 +48,24 @@ export class IngestDocumentUseCase {
   ) {}
 
   async execute(input: IngestDocumentInput): Promise<DocumentRecord> {
+    this.logger.log(`Ingesting document: ${input.title || 'untitled'}`);
     const checksum = this.checksumService.calculate(input.rawText);
     const enableChecksum = this.configService.get('app.enableChecksumValidation', { infer: true });
+    
     if (enableChecksum) {
-      const existing = await this.documentRepository.findDocumentByChecksum(
-        checksum,
-        input.tenantId,
-        input.libraryId,
-      );
-      if (existing) {
-        this.logger.log(`Document already exists (checksum match): ${existing.documentId}`);
-        return existing;
+      try {
+        const existing = await this.documentRepository.findDocumentByChecksum(
+          checksum,
+          input.tenantId,
+          input.libraryId,
+        );
+        if (existing) {
+          this.logger.log(`Document already exists (checksum match): ${existing.documentId}`);
+          return existing;
+        }
+      } catch (err) {
+        this.logger.error(`Error checking for existing document: ${err instanceof Error ? err.message : String(err)}`);
+        // Fall through to try create it anyway
       }
     }
 
@@ -70,8 +77,10 @@ export class IngestDocumentUseCase {
       embedding_model: embeddingModel,
       extraction_model: extractionModel,
     };
+
     let created: DocumentRecord;
     try {
+      this.logger.log(`Creating document record in MongoDB: ${documentId}`);
       created = await this.documentRepository.createDocument({
         documentId,
         tenantId: input.tenantId,
@@ -98,34 +107,59 @@ export class IngestDocumentUseCase {
           return existing;
         }
       }
+      this.logger.error(`Failed to create document record: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
 
     try {
+      this.logger.log(`Chunking document: ${documentId}`);
       const chunks = this.chunker.chunk(documentId, input.rawText);
-      const chunksWithEmbeddings = await Promise.all(
-        chunks.map(async (chunk) => ({
+      this.logger.log(`Generated ${chunks.length} chunks`);
+
+      this.logger.log(`Generating embeddings for chunks (sequential loop)...`);
+      const chunksWithEmbeddings = [];
+      let embeddedCount = 0;
+      for (const chunk of chunks) {
+        const embedding = await this.embeddingPort.embed(chunk.text);
+        chunksWithEmbeddings.push({
           ...chunk,
           tenantId: input.tenantId,
           libraryId: input.libraryId,
-          embedding: await this.embeddingPort.embed(chunk.text),
+          embedding,
           embeddingModel,
-        })),
-      );
+        });
+        embeddedCount++;
+        if (embeddedCount % 10 === 0) {
+          this.logger.log(`Progress: ${embeddedCount}/${chunks.length} embeddings generated`);
+        }
+      }
+
+      this.logger.log(`Inserting chunks into MongoDB: ${chunks.length} chunks`);
       await this.documentRepository.addChunks(chunksWithEmbeddings);
+      
+      this.logger.log(`Saving chunks into Neo4j: ${chunks.length} chunks`);
       await this.graphStore.saveChunks(chunksWithEmbeddings, input.tenantId, input.libraryId);
+      
       await this.documentRepository.updateDocumentStatus(documentId, 'EMBEDDED', 'PENDING');
 
+      this.logger.log(`Extracting graph entities and relations...`);
       const chunkInputs = chunks.map((c) => ({ chunkId: c.chunkId, text: c.text }));
       const extractedGraph = await this.graphExtractor.extract(documentId, chunkInputs);
+      
+      this.logger.log(`Upserting graph context into Neo4j...`);
       await this.graphStore.upsertGraph(extractedGraph, input.tenantId, input.libraryId);
+      
+      this.logger.log(`Linking chunks to entities in Neo4j...`);
       await this.graphStore.linkChunksToEntities(extractedGraph);
+      
       await this.documentRepository.updateDocumentStatus(documentId, 'READY', 'SYNCED');
       this.documentsIngestedCounter.inc();
+      this.logger.log(`Document ingestion completed successfully: ${documentId}`);
     } catch (error) {
+      this.logger.error(`Error during ingestion pipeline for document ${documentId}: ${error instanceof Error ? error.message : String(error)}`);
       await this.documentRepository.updateDocumentStatus(documentId, 'ERROR', 'FAILED');
       throw new InternalServerErrorException({
-        message: 'Document ingested in NoSQL but graph sync failed',
+        message: 'Document ingestion failed',
         documentId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });

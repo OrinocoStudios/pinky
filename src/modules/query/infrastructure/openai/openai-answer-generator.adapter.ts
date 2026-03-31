@@ -45,10 +45,20 @@ export class OpenAiAnswerGeneratorAdapter implements AnswerGeneratorPort {
 
     try {
       this.logger.debug(`Generating answer with ${input.sources.length} sources`);
+      if (this.configService.get('app.debugLlm', { infer: true })) {
+        this.logger.debug(`Prompt content: ${input.prompt.substring(0, 500)}...`);
+      }
 
       const response = await this.client.chat.completions.create({
         model: this.model,
         messages: [
+          {
+            role: 'system',
+            content:
+              'Eres un Asistente Clínico experto. Responde de forma DIRECTA, PROFESIONAL y CONCISA. ' +
+              'PROHIBIDO incluir procesos de pensamiento internos, monólogos o descripciones de tu análisis. ' +
+              'Tu respuesta debe ser puramente clínica y directa al punto solicitado.',
+          },
           {
             role: 'user',
             content: input.prompt,
@@ -58,8 +68,57 @@ export class OpenAiAnswerGeneratorAdapter implements AnswerGeneratorPort {
         max_tokens: input.maxTokens ?? this.maxTokens,
       });
 
-      const answer = response.choices[0]?.message?.content ?? '';
+      let answer = response.choices[0]?.message?.content ?? '';
+      const message = response.choices[0]?.message as any;
+      const reasoning = message?.reasoning || message?.reasoning_content;
+
       const tokensUsed = response.usage?.total_tokens ?? 0;
+
+      // --- ESCUDO ANTI-VERBORREA (CLEANING LOGIC) ---
+      const cleanInternalMonologue = (text: string): string => {
+        let cleaned = text;
+        // Strip common meta-analysis headers and their subsequent content until a final tag or the end
+        const patternsToStrip = [
+          /Analyze the Request:[\s\S]*?(?=RESUMEN CLÍNICO|RESPUESTA PROFESIONAL|$)/gi,
+          /Role: Expert Clinical Assistant[\s\S]*?(?=RESUMEN CLÍNICO|RESPUESTA PROFESIONAL|$)/gi,
+          /Task:[\s\S]*?(?=RESUMEN CLÍNICO|RESPUESTA PROFESIONAL|$)/gi,
+          /Decision:[\s\S]*?(?=RESUMEN CLÍNICO|RESPUESTA PROFESIONAL|$)/gi,
+          /Hypothesis:[\s\S]*?(?=RESUMEN CLÍNICO|RESPUESTA PROFESIONAL|$)/gi,
+          /thinking process:[\s\S]*?(?=RESUMEN CLÍNICO|RESPUESTA PROFESIONAL|$)/gi,
+          /thought:[\s\S]*?(?=RESUMEN CLÍNICO|RESPUESTA PROFESIONAL|$)/gi,
+          /<thought>[\s\S]*?<\/thought>/gi,
+        ];
+
+        for (const pattern of patternsToStrip) {
+          cleaned = cleaned.replace(pattern, '');
+        }
+
+        // Final cleanup of common leftover labels
+        return cleaned
+          .replace(/RESUMEN CLÍNICO EJECUTIVO:/gi, '')
+          .replace(/RESUMEN CLÍNICO:/gi, '')
+          .replace(/RESPUESTA PROFESIONAL:/gi, '')
+          .trim();
+      };
+
+      answer = cleanInternalMonologue(answer);
+
+      if (!answer || answer.trim().length === 0) {
+        if (reasoning && reasoning.trim().length > 0) {
+          this.logger.debug('Attempting to use reasoning as fallback answer');
+          answer = cleanInternalMonologue(reasoning);
+          
+          if (answer.length === 0) {
+            this.logger.warn(`LLM returned empty answer and reasoning was only meta-analysis. Response metadata tokens=${tokensUsed}.`);
+            answer = 'El cerebro generó un proceso de pensamiento pero no una respuesta final clara. Por favor, intenta reformular la pregunta.';
+          } else {
+            this.logger.debug('Using cleaned reasoning as fallback answer');
+          }
+        } else {
+          this.logger.warn(`LLM returned empty answer. Response metadata tokens=${tokensUsed}.`);
+          answer = 'El cerebro no devolvió una respuesta válida. Por favor, intente de nuevo.';
+        }
+      }
 
       // Extract cited source IDs from answer
       const sourcesUsed = this.extractCitedSources(answer, input.sources.map((s) => s.id));
@@ -75,9 +134,10 @@ export class OpenAiAnswerGeneratorAdapter implements AnswerGeneratorPort {
         model: this.model,
         tokensUsed,
       };
-    } catch (error) {
+    } catch (error: any) {
       const latency = Date.now() - startTime;
-      this.logger.error(`Failed to generate answer after ${latency}ms: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to generate answer after ${latency}ms: ${errorMessage}`);
 
       if (error instanceof OpenAI.APIError) {
         if (error.status === 401) {
@@ -92,7 +152,7 @@ export class OpenAiAnswerGeneratorAdapter implements AnswerGeneratorPort {
         throw new Error(`OpenAI API error: ${error.message}`);
       }
 
-      throw new Error(`Unexpected error generating answer: ${error}`);
+      throw new Error(`Unexpected error generating answer: ${errorMessage}`);
     }
   }
 

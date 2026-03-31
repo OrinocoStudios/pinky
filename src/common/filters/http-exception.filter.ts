@@ -15,25 +15,39 @@ type ErrorResponseShape = {
   path: string;
 };
 
-@Catch(HttpException)
+@Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
-  catch(exception: HttpException, host: ArgumentsHost): void {
+  catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
-    const statusCode = exception.getStatus();
-    const exceptionResponse = exception.getResponse();
 
-    const message =
-      typeof exceptionResponse === 'string'
-        ? exceptionResponse
-        : ((exceptionResponse as { message?: string | string[] }).message ?? exception.message);
+    let statusCode = 500;
+    let message: string | string[] = 'Internal server error';
+    let error = 'Internal Server Error';
+    let stack = undefined;
 
-    const error =
-      typeof exceptionResponse === 'object' && exceptionResponse !== null && 'error' in exceptionResponse
-        ? String((exceptionResponse as { error?: unknown }).error ?? exception.name)
-        : exception.name;
+    if (exception instanceof HttpException) {
+      statusCode = exception.getStatus();
+      const exceptionResponse = exception.getResponse();
+      message =
+        typeof exceptionResponse === 'string'
+          ? exceptionResponse
+          : ((exceptionResponse as { message?: string | string[] }).message ?? exception.message);
+
+      error =
+        typeof exceptionResponse === 'object' && exceptionResponse !== null && 'error' in exceptionResponse
+          ? String((exceptionResponse as { error?: unknown }).error ?? exception.name)
+          : exception.name;
+      stack = exception.stack;
+    } else if (exception instanceof Error) {
+      message = exception.message;
+      error = exception.name;
+      stack = exception.stack;
+    } else {
+      message = String(exception);
+    }
 
     const body: ErrorResponseShape = {
       statusCode,
@@ -52,9 +66,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
     };
 
     if (statusCode >= 500) {
-      this.logger.error(logPayload, exception.stack);
+      this.logger.error(JSON.stringify(logPayload), stack);
     } else {
-      this.logger.warn(logPayload);
+      this.logger.warn(JSON.stringify(logPayload));
     }
 
     response.status(statusCode).json(body);

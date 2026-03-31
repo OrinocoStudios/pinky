@@ -23,6 +23,7 @@ import { FileTextExtractorPort } from '../../ingestion/domain/ports/file-text-ex
 import { RequireApiKey } from '../../../common/decorators/require-api-key.decorator';
 import { FileUploadInterceptor } from '../../../common/interceptors/file-upload.interceptor';
 import { BrainConfig } from '../../../config/configuration';
+import { StructuredLogger } from '../../../common/logger/structured-logger.service';
 
 @Controller('documents')
 export class DocumentsController {
@@ -35,6 +36,7 @@ export class DocumentsController {
     private readonly documentRepository: DocumentRepositoryPort,
     @Inject(FILE_TEXT_EXTRACTOR_PORT)
     private readonly fileTextExtractor: FileTextExtractorPort,
+    private readonly logger: StructuredLogger,
   ) {}
 
   @Post('text')

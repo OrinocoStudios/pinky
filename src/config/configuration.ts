@@ -29,6 +29,7 @@ export type AppConfig = {
   maxFileSizeMB: number;
   allowedMimeTypes: string[];
   enableChecksumValidation: boolean;
+  debugLlm: boolean;
 };
 
 export type LlmConfig = {
@@ -113,6 +114,7 @@ export default (): BrainConfig => ({
     maxFileSizeMB: Number(process.env.MAX_FILE_SIZE_MB ?? 10),
     allowedMimeTypes: (process.env.ALLOWED_MIME_TYPES ?? 'text/plain,text/markdown,application/json,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document').split(','),
     enableChecksumValidation: process.env.ENABLE_CHECKSUM_VALIDATION !== 'false',
+    debugLlm: process.env.ENABLE_LLM_DEBUG === 'true',
   },
   mongo: {
     uri: process.env.MONGODB_URI ?? 'mongodb://localhost:27021/brain_service',
@@ -145,15 +147,15 @@ export default (): BrainConfig => ({
       embeddingModel: process.env.OPENAI_EMBEDDING_MODEL ?? 'nomic-embed-text',
       extractionModel: process.env.OPENAI_EXTRACTION_MODEL ?? process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
       temperature: Number(process.env.OPENAI_TEMPERATURE ?? 0.2),
-      maxTokens: Number(process.env.OPENAI_MAX_TOKENS ?? 1000),
-      timeoutMs: Number(process.env.OPENAI_TIMEOUT_MS ?? 30000),
+      maxTokens: Number(process.env.OPENAI_MAX_TOKENS ?? 4096),
+      timeoutMs: Number(process.env.OPENAI_TIMEOUT_MS ?? 120000),
     },
     anthropic: {
       apiKey: process.env.ANTHROPIC_API_KEY ?? '',
       model: process.env.ANTHROPIC_MODEL ?? 'claude-3-5-sonnet-20241022',
       temperature: Number(process.env.ANTHROPIC_TEMPERATURE ?? 0.2),
-      maxTokens: Number(process.env.ANTHROPIC_MAX_TOKENS ?? 1000),
-      timeoutMs: Number(process.env.ANTHROPIC_TIMEOUT_MS ?? 30000),
+      maxTokens: Number(process.env.ANTHROPIC_MAX_TOKENS ?? 4096),
+      timeoutMs: Number(process.env.ANTHROPIC_TIMEOUT_MS ?? 120000),
     },
   },
 });

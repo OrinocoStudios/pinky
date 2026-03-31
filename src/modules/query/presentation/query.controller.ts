@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Headers, Logger, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Headers, Inject, Logger, Param, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
 import { GraphRagQueryUseCase } from '../application/graph-rag-query.usecase';
@@ -7,6 +7,8 @@ import { QueryDto, QueryResponseDto } from './query.dto';
 import { SummarizeDto, SummarizeResponseDto } from './summarize.dto';
 import { RequireApiKey } from '../../../common/decorators/require-api-key.decorator';
 import { BrainConfig } from '../../../config/configuration';
+import { CHAT_HISTORY_REPOSITORY } from '../../../shared/di.tokens';
+import { ChatHistoryRepositoryPort } from '../domain/ports/chat-history.repository.port';
 
 @Controller()
 export class QueryController {
@@ -15,6 +17,8 @@ export class QueryController {
   constructor(
     private readonly graphRagQueryUseCase: GraphRagQueryUseCase,
     private readonly summarizeUseCase: SummarizeUseCase,
+    @Inject(CHAT_HISTORY_REPOSITORY)
+    private readonly chatHistory: ChatHistoryRepositoryPort,
     private readonly configService: ConfigService<BrainConfig>,
   ) {}
 
@@ -36,6 +40,7 @@ export class QueryController {
       query: body.query,
       entityHints: body.entityHints,
       topK: body.topK ?? 8,
+      sessionId: body.sessionId,
     });
 
     this.logger.log(
@@ -55,11 +60,29 @@ export class QueryController {
 
   @Post('summarize')
   @RequireApiKey()
-  async summarize(@Body() body: SummarizeDto): Promise<SummarizeResponseDto> {
+  async summarize(
+    @Body() body: SummarizeDto,
+    @Headers('x-tenant-id') tenantHeader?: string,
+    @Headers('x-library-id') libraryHeader?: string,
+  ): Promise<SummarizeResponseDto> {
+    const tenantId = body.tenantId || this.resolveTenantId(tenantHeader);
+    const libraryIds = this.resolveLibraryIds(body.libraryId ? [body.libraryId] : undefined, libraryHeader);
+    
     const summary = await this.summarizeUseCase.execute({
       messages: body.messages,
+      sessionId: body.sessionId,
+      tenantId,
+      libraryId: libraryIds?.[0],
     });
     return { summary };
+  }
+
+  @Get('query/history/:sessionId')
+  @RequireApiKey()
+  async getChatHistory(
+    @Param('sessionId') sessionId: string,
+  ): Promise<any> {
+    return this.chatHistory.getBySessionId(sessionId);
   }
 
   private resolveTenantId(rawTenantId?: string): string | undefined {

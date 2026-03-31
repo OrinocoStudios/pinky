@@ -25,9 +25,9 @@ export class MongoDatabaseService implements OnModuleInit, OnModuleDestroy {
     const db = this.getDb();
     const documents = db.collection('documents');
     const chunks = db.collection('chunks');
+    const chatHistory = db.collection('chat_history');
 
     await this.dropIndexIfExists(documents, 'tenantId_1_checksum_1');
-
     await documents.createIndex({ documentId: 1 }, { unique: true });
     await documents.createIndex({ checksum: 1 }, { sparse: true });
     await documents.createIndex(
@@ -46,6 +46,9 @@ export class MongoDatabaseService implements OnModuleInit, OnModuleDestroy {
     await chunks.createIndex({ tenantId: 1, documentId: 1 });
     await chunks.createIndex({ tenantId: 1, libraryId: 1, documentId: 1 });
     await chunks.createIndex({ libraryId: 1, documentId: 1 });
+
+    await chatHistory.createIndex({ sessionId: 1 });
+    await chatHistory.createIndex({ libraryId: 1, createdAt: -1 });
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -60,6 +63,10 @@ export class MongoDatabaseService implements OnModuleInit, OnModuleDestroy {
 
   get chunksCollection() {
     return this.getDb().collection('chunks');
+  }
+
+  get chatHistoryCollection() {
+    return this.getDb().collection('chat_history');
   }
 
   async ping(): Promise<number> {

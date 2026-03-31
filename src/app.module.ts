@@ -55,6 +55,8 @@ import { RequireApiKey } from './common/decorators/require-api-key.decorator';
 import { FileUploadInterceptor } from './common/interceptors/file-upload.interceptor';
 import { ChecksumService } from './common/utils/checksum.service';
 import { StructuredLogger } from './common/logger/structured-logger.service';
+import { MongoChatHistoryRepository } from './modules/query/infrastructure/mongo/mongo-chat-history.repository';
+import { CHAT_HISTORY_REPOSITORY } from './shared/di.tokens';
 
 @Module({
   imports: [
@@ -147,6 +149,11 @@ import { StructuredLogger } from './common/logger/structured-logger.service';
     OllamaEmbeddingAdapter,
     OllamaGraphExtractorAdapter,
     OllamaAnswerGeneratorAdapter,
+    MongoChatHistoryRepository,
+    {
+      provide: CHAT_HISTORY_REPOSITORY,
+      useClass: MongoChatHistoryRepository,
+    },
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,

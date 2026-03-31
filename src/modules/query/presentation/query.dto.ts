@@ -18,6 +18,10 @@ export class QueryDto {
   @Min(1)
   @Max(50)
   topK?: number;
+
+  @IsOptional()
+  @IsString()
+  sessionId?: string;
 }
 
 export class ChunkSourceDto {

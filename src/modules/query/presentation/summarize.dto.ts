@@ -1,4 +1,4 @@
-import { IsArray, IsNotEmpty, IsString } from 'class-validator';
+import { IsArray, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class SummarizeMessageDto {
   @IsString()
@@ -13,6 +13,18 @@ export class SummarizeMessageDto {
 export class SummarizeDto {
   @IsArray()
   messages!: SummarizeMessageDto[];
+
+  @IsOptional()
+  @IsString()
+  sessionId?: string;
+
+  @IsOptional()
+  @IsString()
+  tenantId?: string;
+
+  @IsOptional()
+  @IsString()
+  libraryId?: string;
 }
 
 export class SummarizeResponseDto {

@@ -119,8 +119,9 @@ ${chunk.text.slice(0, 4000)}
 
 Rules: Use entity names exactly as they appear. Relationship "from" and "to" must match entity names. Confidence 0-1.`;
 
+    let response: any = null;
     try {
-      const response = await this.client.chat.completions.create({
+      response = await this.client.chat.completions.create({
         model: this.model,
         messages: [
           {
@@ -138,9 +139,10 @@ Rules: Use entity names exactly as they appear. Relationship "from" and "to" mus
       if (!parsed.entities) parsed.entities = [];
       if (!parsed.relationships) parsed.relationships = [];
       return parsed;
-    } catch (error) {
+    } catch (error: any) {
+      const rawResponse = response?.choices?.[0]?.message?.content || 'NO_RESPONSE_CONTENT';
       this.logger.warn(
-        `Falling back to empty graph for chunk ${chunk.chunkId} of document ${documentId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Falling back to empty graph for chunk ${chunk.chunkId} of document ${documentId}: ${error instanceof Error ? error.message : 'Unknown error'}. Raw LLM output was: ${rawResponse.substring(0, 500)}${rawResponse.length > 500 ? '...' : ''}`,
       );
       return { entities: [], relationships: [] };
     }

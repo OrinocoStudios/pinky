@@ -6,7 +6,7 @@ import {
   NestInterceptor,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import multer from 'multer';
+import * as multer from 'multer';
 import { BrainConfig } from '../../config/configuration';
 
 const DEFAULT_ALLOWED_MIME_TYPES = [

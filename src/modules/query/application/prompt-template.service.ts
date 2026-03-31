@@ -49,32 +49,19 @@ export class PromptTemplateService {
   }
 
   private formatPrompt(query: string, contextLines: string[], factsLines: string[]): string {
-    const template = `Eres un asistente experto que responde preguntas basándote ÚNICAMENTE en el contexto y hechos proporcionados a continuación.
+    return `Eres un asistente clínico experto. Usa la siguiente información para responder la pregunta del usuario en español de forma DIRECTA y PROFESIONAL.
 
-REGLAS ESTRICTAS:
-1. Solo usa información del contexto [CTX-X] y hechos [FACT-X] proporcionados
-2. Si no tienes información suficiente para responder, di: "No tengo información suficiente para responder esta pregunta"
-3. DEBES citar las fuentes usando el formato [CTX-X] o [FACT-X] al final de cada afirmación que hagas
-4. NO inventes información ni hagas suposiciones
-5. NO uses conocimiento externo, solo lo que se proporciona aquí
+INSTRUCCIONES:
+- No incluyas procesos de pensamiento internos o "Thinking Process".
+- Responde directamente usando el contexto proporcionado.
+- Mantén un tono médico y conciso.
 
-PREGUNTA DEL USUARIO:
-${query}
+CONTEXTO:
+${contextLines.join('\n')}
+${factsLines.length > 0 ? factsLines.join('\n') : ''}
 
-CONTEXTO TEXTUAL DISPONIBLE:
-${contextLines.length > 0 ? contextLines.join('\n') : 'Sin contexto textual disponible.'}
+PREGUNTA: ${query}
 
-HECHOS VERIFICADOS DEL GRAFO:
-${factsLines.length > 0 ? factsLines.join('\n') : 'Sin hechos de grafo disponibles.'}
-
-INSTRUCCIONES PARA TU RESPUESTA:
-- Responde de forma concisa y clara
-- Cita cada fuente relevante usando [CTX-X] o [FACT-X]
-- Si combinas información de múltiples fuentes, cita todas: [CTX-1][FACT-2]
-- Si la información es insuficiente, sé honesto y dilo
-
-RESPUESTA:`;
-
-    return template;
+RESPUESTA PROFESIONAL:`;
   }
 }
