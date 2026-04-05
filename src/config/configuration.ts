@@ -16,7 +16,6 @@ export type AppConfig = {
    * If empty and CORS is enabled, the server will echo/allow origins dynamically.
    */
   corsOrigins: string[];
-  searchEngine: 'mongo' | 'elasticsearch' | 'neo4j';
   objectStorePath: string;
   topK: number;
   chunkSize: number;
@@ -30,6 +29,24 @@ export type AppConfig = {
   allowedMimeTypes: string[];
   enableChecksumValidation: boolean;
   debugLlm: boolean;
+};
+
+export type AuthConfig = {
+  enableDevLogin: boolean;
+  jwtSecret: string;
+  jwtExpiresIn: string;
+  cookieName: string;
+  cookieSecure: boolean;
+  cookieSameSite: 'lax' | 'strict' | 'none';
+  successUrl: string;
+  failureUrl: string;
+  allowedAdminEmails: string[];
+  googleClientId: string;
+  googleClientSecret: string;
+  googleCallbackUrl: string;
+  githubClientId: string;
+  githubClientSecret: string;
+  githubCallbackUrl: string;
 };
 
 export type LlmConfig = {
@@ -53,19 +70,10 @@ export type LlmConfig = {
   };
 };
 
-export type MongoConfig = {
-  uri: string;
-  dbName: string;
-};
-
 export type Neo4jConfig = {
   uri: string;
   user: string;
   password: string;
-};
-
-export type RedisConfig = {
-  url: string;
 };
 
 export type OllamaConfig = {
@@ -81,9 +89,8 @@ export type OllamaConfig = {
 
 export type BrainConfig = {
   app: AppConfig;
-  mongo: MongoConfig;
+  auth: AuthConfig;
   neo4j: Neo4jConfig;
-  redis: RedisConfig;
   llm: LlmConfig;
   ollama: OllamaConfig;
 };
@@ -101,7 +108,6 @@ export default (): BrainConfig => ({
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean),
-    searchEngine: (process.env.SEARCH_ENGINE ?? 'mongo') as 'mongo' | 'elasticsearch' | 'neo4j',
     objectStorePath: process.env.OBJECT_STORE_PATH ?? './data/objects',
     topK: Number(process.env.TOP_K ?? 8),
     chunkSize: Number(process.env.CHUNK_SIZE ?? 1200),
@@ -116,17 +122,30 @@ export default (): BrainConfig => ({
     enableChecksumValidation: process.env.ENABLE_CHECKSUM_VALIDATION !== 'false',
     debugLlm: process.env.ENABLE_LLM_DEBUG === 'true',
   },
-  mongo: {
-    uri: process.env.MONGODB_URI ?? 'mongodb://localhost:27021/brain_service',
-    dbName: process.env.MONGODB_DB ?? 'brain_service',
+  auth: {
+    enableDevLogin: process.env.AUTH_ENABLE_DEV_LOGIN === 'true',
+    jwtSecret: process.env.AUTH_JWT_SECRET ?? 'change-me-auth-secret',
+    jwtExpiresIn: process.env.AUTH_JWT_EXPIRES_IN ?? '8h',
+    cookieName: process.env.AUTH_COOKIE_NAME ?? 'pinky_auth',
+    cookieSecure: process.env.AUTH_COOKIE_SECURE === 'true',
+    cookieSameSite: ((process.env.AUTH_COOKIE_SAME_SITE ?? 'lax').toLowerCase() as 'lax' | 'strict' | 'none'),
+    successUrl: process.env.AUTH_SUCCESS_URL ?? 'http://localhost:5173',
+    failureUrl: process.env.AUTH_FAILURE_URL ?? 'http://localhost:5173/login?error=unauthorized',
+    allowedAdminEmails: (process.env.AUTH_ALLOWED_ADMIN_EMAILS ?? '')
+      .split(',')
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean),
+    googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
+    googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+    googleCallbackUrl: process.env.GOOGLE_CALLBACK_URL ?? 'http://localhost:8081/auth/google/callback',
+    githubClientId: process.env.GITHUB_CLIENT_ID ?? '',
+    githubClientSecret: process.env.GITHUB_CLIENT_SECRET ?? '',
+    githubCallbackUrl: process.env.GITHUB_CALLBACK_URL ?? 'http://localhost:8081/auth/github/callback',
   },
   neo4j: {
     uri: process.env.NEO4J_URI ?? 'bolt://localhost:7688',
     user: process.env.NEO4J_USER ?? 'neo4j',
     password: process.env.NEO4J_PASSWORD ?? 'neo4j_password',
-  },
-  redis: {
-    url: process.env.REDIS_URL ?? 'redis://localhost:6381',
   },
   ollama: {
     baseUrl: process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434',

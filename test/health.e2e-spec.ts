@@ -18,7 +18,6 @@ describe('Health (e2e)', () => {
 
     expect(res.body.status).toBe('ok');
     expect(res.body.service).toBe('brain-service');
-    expect(res.body.services.mongodb.status).toBe('up');
     expect(res.body.services.neo4j.status).toBe('up');
     expect(res.body.services.llm).toBeDefined();
     expect(res.body.timestamp).toBeDefined();

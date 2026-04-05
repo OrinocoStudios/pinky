@@ -49,6 +49,9 @@ export class PromptTemplateService {
   }
 
   private formatPrompt(query: string, contextLines: string[], factsLines: string[]): string {
+    const normalizedContext = contextLines.length > 0 ? contextLines.join('\n') : 'Sin contexto textual disponible.';
+    const normalizedFacts = factsLines.length > 0 ? factsLines.join('\n') : 'Sin hechos de grafo disponibles.';
+
     return `Eres un asistente clínico experto. Usa la siguiente información para responder la pregunta del usuario en español de forma DIRECTA y PROFESIONAL.
 
 INSTRUCCIONES:
@@ -57,8 +60,8 @@ INSTRUCCIONES:
 - Mantén un tono médico y conciso.
 
 CONTEXTO:
-${contextLines.join('\n')}
-${factsLines.length > 0 ? factsLines.join('\n') : ''}
+${normalizedContext}
+${normalizedFacts}
 
 PREGUNTA: ${query}
 

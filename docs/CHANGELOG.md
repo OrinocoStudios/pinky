@@ -4,6 +4,29 @@ Este registro resume cambios de implementación para mantener contexto operativo
 
 ---
 
+## 2026-04-04 (Neo4j-only persistence)
+
+### Added
+
+- `Neo4jDocumentRepository` como repositorio unico de `Document` y `Chunk`.
+- `Neo4jChatHistoryRepository` para persistir historial de chat sin MongoDB.
+- Indices y constraints de Neo4j para `Document`, `Chunk` y `ChatMessage`.
+
+### Changed
+
+- El runtime paso a Neo4j-only: `DOCUMENT_REPOSITORY`, `CHAT_HISTORY_REPOSITORY`, busqueda vectorial y health operan sobre Neo4j.
+- La ingesta ya no persiste chunks por un camino Mongo ni depende de sincronizacion por outbox.
+- `GET /health` ahora reporta Neo4j + configuracion LLM.
+- `docker-compose.yml`, `docker-compose.prod.yml` y `.env.example` se simplificaron para no requerir MongoDB ni Redis.
+
+### Removed
+
+- Dependencia `mongoose`.
+- Adaptadores Mongo (`MongoDocumentRepository`, `MongoChatHistoryRepository`, `MongoChunkSearchAdapter`, `MongoDatabaseService`).
+- Referencias operativas a outbox como parte del flujo vigente.
+
+---
+
 ## 2026-03-29 (Clinical traceability contract for Convit MVP)
 
 ### Added

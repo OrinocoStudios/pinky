@@ -5,6 +5,7 @@ import { PromptTemplateService } from './prompt-template.service';
 import { StructuredLogger } from '../../../common/logger/structured-logger.service';
 import {
   ANSWER_GENERATOR_PORT,
+  CHAT_HISTORY_REPOSITORY,
   CHUNK_SEARCH_PORT,
   DOCUMENT_REPOSITORY,
   GRAPH_STORE_PORT,
@@ -16,6 +17,7 @@ describe('GraphRagQueryUseCase', () => {
   let documentRepository: Record<string, jest.Mock>;
   let graphStore: Record<string, jest.Mock>;
   let answerGenerator: Record<string, jest.Mock>;
+  let chatHistory: Record<string, jest.Mock>;
 
   beforeEach(async () => {
     chunkSearch = {
@@ -59,6 +61,12 @@ describe('GraphRagQueryUseCase', () => {
       }),
     };
 
+    chatHistory = {
+      saveMessage: jest.fn().mockResolvedValue(undefined),
+      getBySessionId: jest.fn().mockResolvedValue([]),
+      clearSession: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module = await Test.createTestingModule({
       providers: [
         GraphRagQueryUseCase,
@@ -71,6 +79,7 @@ describe('GraphRagQueryUseCase', () => {
         { provide: DOCUMENT_REPOSITORY, useValue: documentRepository },
         { provide: GRAPH_STORE_PORT, useValue: graphStore },
         { provide: ANSWER_GENERATOR_PORT, useValue: answerGenerator },
+        { provide: CHAT_HISTORY_REPOSITORY, useValue: chatHistory },
         makeCounterProvider({ name: 'brain_queries_total', help: 'test' }),
         makeCounterProvider({ name: 'brain_query_errors_total', help: 'test' }),
         makeHistogramProvider({ name: 'brain_query_latency_ms', help: 'test', buckets: [100] }),

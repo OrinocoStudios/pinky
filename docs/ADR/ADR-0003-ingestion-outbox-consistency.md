@@ -1,8 +1,10 @@
 # ADR-0003: Consistencia entre MongoDB y Neo4j mediante Outbox
 
-- **Estado**: Accepted
+- **Estado**: Superseded by ADR-0010
 - **Fecha**: 2026-02-24
 - **Decisores**: Equipo Backend / AI Architecture
+
+> Historico: este ADR ya no aplica. El sistema actual persiste directamente en Neo4j y no usa outbox.
 
 ## Contexto
 

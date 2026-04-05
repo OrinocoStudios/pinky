@@ -1,6 +1,5 @@
 import { Controller, Get, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { MongoDatabaseService } from '../documents/infrastructure/mongo/mongo-database.service';
 import { GraphStorePort } from '../graph/domain/ports/graph-store.port';
 import { GRAPH_STORE_PORT } from '../../shared/di.tokens';
 import { BrainConfig } from '../../config/configuration';
@@ -8,7 +7,6 @@ import { BrainConfig } from '../../config/configuration';
 @Controller()
 export class HealthController {
   constructor(
-    private readonly mongoDb: MongoDatabaseService,
     @Inject(GRAPH_STORE_PORT)
     private readonly graphStore: GraphStorePort,
     private readonly configService: ConfigService<BrainConfig>,
@@ -21,13 +19,6 @@ export class HealthController {
     const uptime = Math.floor(process.uptime());
 
     const services: Record<string, { status: string; latency_ms?: number }> = {};
-
-    try {
-      const mongoLatency = await this.mongoDb.ping();
-      services.mongodb = { status: 'up', latency_ms: mongoLatency };
-    } catch {
-      services.mongodb = { status: 'down' };
-    }
 
     try {
       const neoStart = Date.now();
@@ -43,8 +34,7 @@ export class HealthController {
       provider: llmProvider ?? 'none',
     };
 
-    const allUp =
-      services.mongodb?.status === 'up' && services.neo4j?.status === 'up';
+    const allUp = services.neo4j?.status === 'up';
     const status = allUp ? 'ok' : 'degraded';
 
     return {

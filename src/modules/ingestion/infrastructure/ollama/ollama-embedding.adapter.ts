@@ -70,7 +70,12 @@ export class OllamaEmbeddingAdapter implements EmbeddingPort {
   }
 
   private normalize(vec: number[]): number[] {
-    const norm = Math.sqrt(vec.reduce((acc, v) => acc + v * v, 0)) || 1;
+    const norm = Math.sqrt(vec.reduce((acc, v) => acc + v * v, 0));
+    if (!Number.isFinite(norm) || norm <= 0) {
+      console.warn('[OllamaEmbedding] Zero-norm embedding received; using safe fallback vector');
+      return vec.map((_, index) => (index === 0 ? 1 : 0));
+    }
+
     return vec.map((v) => v / norm);
   }
 }

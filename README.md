@@ -6,15 +6,16 @@ Servicio API para ingesta documental y GraphRAG con arquitectura hexagonal.
 
 - `domain`: modelos y puertos (sin dependencias externas).
 - `application`: casos de uso.
-- `infrastructure`: adaptadores (`mongo`, `neo4j`, `elasticsearch`).
+- `infrastructure`: adaptadores (`neo4j`, `ollama`, `openai`, `anthropic`).
 - `config`: configuración central de runtime.
 
-## Motor de búsqueda desacoplado
+## Persistencia
 
-El puerto `ChunkSearchPort` permite cambiar entre:
+Pinky opera ahora en modo `Neo4j-only`.
 
-- `MongoChunkSearchAdapter` (default).
-- `ElasticsearchChunkSearchAdapter` (cuando `SEARCH_ENGINE=elasticsearch`).
+- `Document`, `Chunk`, `Entity` y `ChatMessage` viven en Neo4j.
+- La búsqueda vectorial usa el índice `chunk_embedding_index` de Neo4j.
+- La API ya no depende de MongoDB, Redis ni outbox.
 
 ## Arranque local
 
@@ -47,7 +48,6 @@ Opcional: `REINDEX_LIMIT=100 yarn reindex` para limitar chunks procesados.
 - `POST /documents/generate` (body: `{ useCaseId, title?, params? }`)
 - `GET /documents`
 - `DELETE /documents/:id`
-- `POST /outbox/retry`
 - `POST /query`
 - `POST /index/rebuild` (body: `{ limit? }`)
 - `POST /index/incremental` (body: `{ limit? }`)
@@ -93,18 +93,15 @@ Sin headers de scope, el sistema opera sobre todo el corpus disponible (comporta
 
 ## Pipeline 1 (estado actual)
 
-- Guarda documento y metadata en Mongo (`documents`).
-- Chunking + embeddings reales (Ollama `nomic-embed-text`) en Mongo (`chunks`).
-- Extracción estructurada de entidades/relaciones por chunk (Ollama `llama3.2`) con `sourceChunkId` y upsert en Neo4j.
-- Outbox Mongo para sincronización de grafo (`graph_sync_outbox`) con retries automáticos.
-- Manejo de consistencia:
-  - Si falla Neo4j, el documento queda en Mongo y se marca `ERROR/FAILED`.
-  - El evento queda en outbox y puede reprocesarse por worker o `POST /outbox/retry`.
+- Guarda documento y metadata directamente en Neo4j (`Document`).
+- Hace chunking y persiste `Chunk` + embeddings directamente en Neo4j.
+- Extrae entidades/relaciones por chunk y hace upsert en Neo4j.
+- Mantiene el estado documental (`RECEIVED`, `EMBEDDED`, `READY`, `ERROR`) en el mismo backend.
 
 ## Pipeline 2 (estado actual)
 
 - `POST /query` ejecuta GraphRAG básico:
-  - Recupera contexto rápido desde chunks en Mongo (búsqueda híbrida inicial).
+  - Recupera contexto rápido desde chunks en Neo4j (búsqueda vectorial).
   - Recupera hechos del grafo en Neo4j.
   - Construye prompt grounded con citación de fuentes.
   - Genera respuesta usando LLM real (OpenAI/Anthropic) o modo local.

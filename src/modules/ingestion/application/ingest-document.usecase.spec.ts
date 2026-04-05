@@ -39,7 +39,6 @@ describe('IngestDocumentUseCase', () => {
 
     graphStore = {
       upsertGraph: jest.fn().mockResolvedValue(undefined),
-      saveChunks: jest.fn().mockResolvedValue(undefined),
       linkChunksToEntities: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -94,7 +93,6 @@ describe('IngestDocumentUseCase', () => {
     expect(result.status).toBe('RECEIVED');
     expect(repo.createDocument).toHaveBeenCalledTimes(1);
     expect(repo.addChunks).toHaveBeenCalledTimes(1);
-    expect(graphStore.saveChunks).toHaveBeenCalledTimes(1);
     expect(graphStore.upsertGraph).toHaveBeenCalledTimes(1);
     expect(graphStore.linkChunksToEntities).toHaveBeenCalledTimes(1);
   });
@@ -110,15 +108,13 @@ describe('IngestDocumentUseCase', () => {
     });
   });
 
-  it('should pass chunks to graphStore.saveChunks', async () => {
+  it('should pass embedded chunks to the document repository', async () => {
     await useCase.execute(makeInput());
 
-    expect(graphStore.saveChunks).toHaveBeenCalledWith(
+    expect(repo.addChunks).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ embedding: [0.1, 0.2, 0.3] }),
       ]),
-      undefined, // tenantId
-      undefined, // libraryId
     );
   });
 
@@ -135,7 +131,7 @@ describe('IngestDocumentUseCase', () => {
 
     expect(result.documentId).toBe('existing-doc');
     expect(repo.createDocument).not.toHaveBeenCalled();
-    expect(graphStore.saveChunks).not.toHaveBeenCalled();
+    expect(repo.addChunks).not.toHaveBeenCalled();
   });
 
   it('should store metadata with embedding and extraction model', async () => {
@@ -156,10 +152,10 @@ describe('IngestDocumentUseCase', () => {
     expect(createCall.tenantId).toBe('tenant-a');
     expect(createCall.libraryId).toBe('lib-1');
 
-    expect(graphStore.saveChunks).toHaveBeenCalledWith(
-      expect.any(Array),
-      'tenant-a',
-      'lib-1',
+    expect(repo.addChunks).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ tenantId: 'tenant-a', libraryId: 'lib-1' }),
+      ]),
     );
   });
 

@@ -10,7 +10,7 @@
 
 El despliegue se divide en **dos servicios Compose independientes**:
 
-1. **brain-service** (`docker-compose.prod.yml`): API NestJS + MongoDB + Neo4j + Redis
+1. **brain-service** (`docker-compose.prod.yml`): API NestJS + Neo4j
 2. **ollama** (`docker-compose.ollama.yml`): Servidor de modelos LLM (embeddings + extracción)
 
 La imagen de `brain-service` se construye y publica automáticamente en **GitHub Container Registry** (GHCR) mediante GitHub Actions. El flujo es:
@@ -61,7 +61,7 @@ ollama list
 
 El compose usa `image: ghcr.io/orinocostudios/pinky:latest` por defecto. Se puede cambiar con la variable `BRAIN_IMAGE` para apuntar a un tag específico (ej: un SHA de commit).
 
-El servicio esperará a que MongoDB, Neo4j y Redis pasen sus healthchecks antes de arrancar.
+El servicio esperará a que Neo4j pase su healthcheck antes de arrancar.
 
 ---
 
@@ -120,7 +120,6 @@ Respuesta esperada:
 {
   "status": "ok",
   "services": {
-    "mongodb": { "status": "up" },
     "neo4j": { "status": "up" },
     "llm": { "provider": "local", "status": "configured" }
   }
@@ -162,8 +161,7 @@ Cuando tengas un servidor con GPU disponible:
 ### Backups
 
 Dokploy soporta backups automáticos de named volumes. Los volúmenes a respaldar son:
-- `brain-mongo-data` (documentos, chunks, outbox)
-- `brain-neo4j-data` (grafo de conocimiento)
+- `brain-neo4j-data` (documentos, chunks, grafo y chat history)
 - `brain-objects` (archivos crudos)
 
 ### Métricas

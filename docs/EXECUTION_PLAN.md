@@ -8,7 +8,9 @@ Evolucionar `brain_service` como API independiente por instancia (un servicio po
 
 Este plan consolida y limpia el contexto del plan original `memoria_agnostica_contexto_c6131274.plan.md`, alineándolo al estado real del código en `memory_architecture/brain_service`.
 
-## Estado actual (alineado a código)
+> Nota: este documento contiene contexto historico. La arquitectura vigente ya no es polyglot ni usa outbox; el estado actual del runtime es Neo4j-only.
+
+## Estado actual (alineado a codigo)
 
 ### Completado
 

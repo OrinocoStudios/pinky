@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { int } from 'neo4j-driver';
 import { GraphStorePort, ChunkWithEmbedding } from '../../domain/ports/graph-store.port';
 import { ExtractedGraph, GraphEntity, GraphRelationship } from '../../domain/models/graph.model';
 import { Neo4jConnectionService } from './neo4j-connection.service';
@@ -210,22 +211,6 @@ export class Neo4jGraphStoreAdapter implements GraphStorePort {
         `,
         { documentId, tenantId: tenantId ?? null, libraryId: libraryId ?? null },
       );
-      await session.run(
-        `
-        MATCH (d:Document {documentId: $documentId})
-        WHERE 1=1${tenantFilter}${libraryFilter}
-        DETACH DELETE d
-        `,
-        { documentId, tenantId: tenantId ?? null, libraryId: libraryId ?? null },
-      );
-      // Also delete associated Chunk nodes
-      await session.run(
-        `
-        MATCH (c:Chunk {documentId: $documentId})
-        DETACH DELETE c
-        `,
-        { documentId },
-      );
     } finally {
       await session.close();
     }
@@ -234,6 +219,7 @@ export class Neo4jGraphStoreAdapter implements GraphStorePort {
   async ensureVectorIndex(dimensions: number): Promise<void> {
     const session = this.neo4j.getSession();
     try {
+      await session.run('DROP INDEX chunk_embedding_index IF EXISTS');
       await session.run(
         `CREATE VECTOR INDEX chunk_embedding_index IF NOT EXISTS
          FOR (c:Chunk) ON (c.embedding)
@@ -241,8 +227,8 @@ export class Neo4jGraphStoreAdapter implements GraphStorePort {
            \`vector.dimensions\`: $dimensions,
            \`vector.similarity_function\`: 'cosine'
          }}`,
-        { dimensions },
-      );
+         { dimensions: int(dimensions) },
+       );
     } finally {
       await session.close();
     }

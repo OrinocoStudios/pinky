@@ -32,7 +32,6 @@ This applies to:
 - `POST /query`
 - `POST /index/rebuild`
 - `POST /index/incremental`
-- `POST /outbox/retry`
 - `GET /documents`
 
 ## Library Scope Header
@@ -59,7 +58,7 @@ This applies to all endpoints listed in the Multi-tenant section above.
 
 ### GET /health
 
-Returns service health status including database connectivity and LLM configuration.
+Returns service health status including Neo4j connectivity and LLM configuration.
 
 **Authentication**: None
 
@@ -75,7 +74,6 @@ GET /health
   "timestamp": "2026-02-26T20:34:05.943Z",
   "uptime": 506,
   "services": {
-    "mongodb": { "status": "up", "latency_ms": 2 },
     "neo4j": { "status": "up", "latency_ms": 15 },
     "llm": { "status": "configured", "provider": "local" }
   },
@@ -273,7 +271,7 @@ Returns up to 100 documents. The `rawText` field is included in each document.
 
 ### DELETE /documents/:id 🔐
 
-Deletes a document and all associated data (chunks, embeddings, graph entities/relationships, outbox events).
+Deletes a document and all associated data (chunks, embeddings, graph entities/relationships).
 
 **Authentication**: Required
 
@@ -374,43 +372,6 @@ X-API-Key: <key>
 - `[FACT-N]` — references `truthFacts[N-1]`
 
 **Note on `LLM_PROVIDER=local`**: In local mode, the `answer` field contains the raw grounded prompt (not a real LLM response). This is useful for debugging or forwarding the prompt to your own LLM.
-
----
-
-### POST /outbox/retry 🔐
-
-Manually retries failed graph synchronization events. Events that failed during document ingestion (e.g., Neo4j was temporarily unavailable) are stored in an outbox and can be retried.
-
-**Authentication**: Required
-
-**Request**:
-```
-POST /outbox/retry
-Content-Type: application/json
-X-API-Key: <key>
-```
-
-**Body**:
-```json
-{
-  "limit": 20
-}
-```
-
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `limit` | integer | No | `20` | Max events to process (1–200) |
-
-**Response** (`200 OK`):
-```json
-{
-  "processed": 3,
-  "synced": 2,
-  "failed": 1
-}
-```
-
-**Note**: A background worker also retries events automatically every 30 seconds. Events are moved to `DEAD_LETTER` after 10 failed attempts.
 
 ---
 

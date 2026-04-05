@@ -16,15 +16,14 @@ src/modules/<module>/
 │   ├── models/       # Tipos e interfaces de dominio
 │   └── ports/        # Contratos (interfaces) que la infraestructura implementa
 ├── application/      # Casos de uso y lógica de orquestación
-├── infrastructure/   # Adaptadores concretos (mongo, neo4j, ollama, openai, etc.)
+├── infrastructure/   # Adaptadores concretos (neo4j, ollama, openai, etc.)
 └── presentation/     # Controllers HTTP y DTOs
 ```
 
 ### Stack Tecnológico
 
 - **Framework**: NestJS 11.x / TypeScript 5.6 / Node.js 20
-- **Almacenamiento documental**: MongoDB (mongoose 8.7) — documentos, chunks, embeddings, outbox
-- **Grafo de conocimiento**: Neo4j (neo4j-driver 5.26) — entidades, relaciones, Document→MENTIONS→Entity
+- **Persistencia unica**: Neo4j (neo4j-driver 5.26) — documentos, chunks, grafo e historial de chat
 - **Embeddings**: Ollama (`nomic-embed-text` por defecto) vía `/api/embed`
 - **Extracción de grafo**: Ollama (`llama3.2` por defecto) vía `/api/generate` con output JSON
 - **Generación de respuesta**: OpenAI, Anthropic, o modo local (seleccionable con `LLM_PROVIDER`)
@@ -56,15 +55,14 @@ Para queries: `POST /query` acepta `libraryIds: string[]` en el body para consul
 2. Chunking con overlap configurable (`CHUNK_SIZE`, `CHUNK_OVERLAP`)
 3. Embedding vectorial por chunk (Ollama `nomic-embed-text`)
 4. Extracción de entidades/relaciones por chunk (Ollama `llama3.2`, output JSON)
-5. Persistencia en MongoDB (documento + chunks + embeddings)
+5. Persistencia en Neo4j (Document + Chunk + embeddings)
 6. Upsert del grafo en Neo4j (Document, Entity, MENTIONS, RELATED)
-7. Outbox event para retry si Neo4j falla
-8. Deduplicación por checksum SHA-256 (por tenant + library)
+7. Deduplicacion por checksum SHA-256 (por tenant + library)
 
 ### Pipeline de Query (GraphRAG)
 
 1. Recibe pregunta (`POST /query`)
-2. Embedding del query → búsqueda híbrida (vector + texto) en chunks de MongoDB
+2. Embedding del query → busqueda vectorial en chunks de Neo4j
 3. Extracción de entity hints → búsqueda de entidades y relaciones en Neo4j
 4. Construcción de prompt grounded con `[CTX-X]` y `[FACT-X]`
 5. Generación de respuesta con LLM (OpenAI/Anthropic/local)
@@ -73,14 +71,13 @@ Para queries: `POST /query` acepta `libraryIds: string[]` en el body para consul
 
 ## Endpoints API
 
-- `GET /health` — Health check (MongoDB, Neo4j, LLM)
+- `GET /health` — Health check (Neo4j, LLM)
 - `GET /documents` — Listar documentos (filtrable por tenant/library)
 - `POST /documents/text` 🔐 — Ingestar texto plano
 - `POST /documents/upload` 🔐 — Subir archivo (txt/md/json/csv/pdf/docx)
 - `POST /documents/generate` 🔐 — Generar documento desde template
 - `DELETE /documents/:id` 🔐 — Eliminar documento + chunks + grafo
 - `POST /query` 🔐 — Consulta GraphRAG con citación
-- `POST /outbox/retry` 🔐 — Reintentar sync de grafo fallidos
 - `POST /index/rebuild` 🔐 — Re-embeddings de todos los chunks
 - `POST /index/incremental` 🔐 — Re-embeddings de chunks desactualizados
 - `GET /metrics` — Métricas Prometheus
@@ -96,8 +93,7 @@ API_KEY=<secret>
 ENABLE_API_KEY_AUTH=true
 ENABLE_MULTI_TENANT=false
 
-# Databases
-MONGODB_URI=mongodb://localhost:27021/brain_service
+# Database
 NEO4J_URI=bolt://localhost:7688
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=<secret>
@@ -141,6 +137,6 @@ npm run reindex        # Reindexar embeddings de chunks existentes
 ## Patrones Clave
 
 - **Hexagonal Architecture**: puertos (interfaces) + adaptadores (implementaciones). Los puertos viven en `domain/ports/`, los adaptadores en `infrastructure/`.
-- **Outbox Pattern**: consistencia eventual entre MongoDB y Neo4j. Eventos de sync en `graph_sync_outbox` con retry automático cada 30s y dead-letter después de 10 intentos.
-- **Provider Factory**: selección dinámica de adaptadores por configuración (`LLM_PROVIDER`, `SEARCH_ENGINE`).
+- **Neo4j-only Persistence**: documentos, chunks, grafo e historial viven en un unico backend.
+- **Provider Factory**: selección dinámica de adaptadores por configuración (`LLM_PROVIDER`).
 - **Checksum Idempotency**: SHA-256 del contenido para deduplicación. Scoped por tenant + library.

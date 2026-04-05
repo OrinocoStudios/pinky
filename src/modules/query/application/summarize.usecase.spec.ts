@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SummarizeUseCase } from './summarize.usecase';
 import { ANSWER_GENERATOR_PORT } from '../../../shared/di.tokens';
 import { StructuredLogger } from '../../../common/logger/structured-logger.service';
+import { IngestDocumentUseCase } from '../../ingestion/application/ingest-document.usecase';
 
 describe('SummarizeUseCase', () => {
   let useCase: SummarizeUseCase;
@@ -30,6 +31,12 @@ describe('SummarizeUseCase', () => {
             debug: jest.fn(),
             log: jest.fn(),
             error: jest.fn(),
+          },
+        },
+        {
+          provide: IngestDocumentUseCase,
+          useValue: {
+            execute: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

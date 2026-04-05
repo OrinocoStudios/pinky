@@ -24,7 +24,7 @@ describe('Index (e2e)', () => {
     it('should return zero when no chunks exist', async () => {
       const res = await request(app.getHttpServer())
         .post('/index/rebuild')
-        .send({})
+        .send({ limit: 10 })
         .expect(201);
 
       expect(res.body.processed).toBe(0);

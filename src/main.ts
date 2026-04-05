@@ -1,6 +1,9 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
+import { NextFunction, Request, Response } from 'express';
+import * as cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import * as bodyParser from 'body-parser';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -10,7 +13,46 @@ import { StructuredLogger } from './common/logger/structured-logger.service';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService<BrainConfig>);
+  const jwtService = app.get(JwtService);
   app.useLogger(app.get(StructuredLogger));
+  app.use(cookieParser());
+
+  app.use('/metrics', async (request: Request, response: Response, next: NextFunction) => {
+    const authConfig = configService.get('auth', { infer: true });
+    const appConfig = configService.get('app', { infer: true })!;
+    const webAuthEnabled = Boolean(authConfig?.allowedAdminEmails?.length);
+
+    if (!webAuthEnabled && !appConfig.enableApiKeyAuth) {
+      next();
+      return;
+    }
+
+    const cookieToken = request.cookies?.[authConfig?.cookieName ?? 'pinky_auth'];
+    const authorizationHeader = typeof request.headers.authorization === 'string' ? request.headers.authorization : '';
+    const bearerToken = authorizationHeader.startsWith('Bearer ')
+      ? authorizationHeader.slice('Bearer '.length).trim()
+      : null;
+    const apiKey = typeof request.headers['x-api-key'] === 'string' ? request.headers['x-api-key'] : null;
+
+    try {
+      if (cookieToken || bearerToken) {
+        await jwtService.verifyAsync(cookieToken ?? bearerToken ?? '', {
+          secret: authConfig?.jwtSecret,
+        });
+        next();
+        return;
+      }
+
+      if (appConfig.enableApiKeyAuth && apiKey === appConfig.apiKey) {
+        next();
+        return;
+      }
+
+      response.status(401).json({ message: 'Authentication is required' });
+    } catch {
+      response.status(401).json({ message: 'Invalid authentication token' });
+    }
+  });
 
   const corsEnabled = configService.get('app.corsEnabled', { infer: true }) ?? false;
   const corsOrigins = configService.get('app.corsOrigins', { infer: true }) ?? [];
@@ -18,8 +60,8 @@ async function bootstrap() {
     app.enableCors({
       origin: corsOrigins.length > 0 ? corsOrigins : true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'X-API-Key', 'X-Tenant-Id', 'X-Library-Id'],
-      credentials: false,
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-Tenant-Id', 'X-Library-Id'],
+      credentials: true,
     });
   }
 

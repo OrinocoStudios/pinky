@@ -51,7 +51,12 @@ export class OpenAiEmbeddingAdapter implements EmbeddingPort {
   }
 
   private normalize(vec: number[]): number[] {
-    const norm = Math.sqrt(vec.reduce((acc, value) => acc + value * value, 0)) || 1;
+    const norm = Math.sqrt(vec.reduce((acc, value) => acc + value * value, 0));
+    if (!Number.isFinite(norm) || norm <= 0) {
+      this.logger.warn('OpenAI-compatible endpoint returned a zero-norm embedding; using safe fallback vector');
+      return vec.map((_, index) => (index === 0 ? 1 : 0));
+    }
+
     return vec.map((value) => value / norm);
   }
 }

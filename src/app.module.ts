@@ -11,6 +11,7 @@ import configuration, { BrainConfig } from './config/configuration';
 import { HealthController } from './modules/health/health.controller';
 import {
   ANSWER_GENERATOR_PORT,
+  CHAT_HISTORY_REPOSITORY,
   CHUNK_SEARCH_PORT,
   DOCUMENT_GENERATOR_PORT,
   DOCUMENT_REPOSITORY,
@@ -19,13 +20,11 @@ import {
   GRAPH_EXTRACTOR_PORT,
   GRAPH_STORE_PORT,
 } from './shared/di.tokens';
-import { MongoDocumentRepository } from './modules/documents/infrastructure/mongo/mongo-document.repository';
-import { MongoChunkSearchAdapter } from './modules/search/infrastructure/mongo/mongo-chunk-search.adapter';
-import { ElasticsearchChunkSearchAdapter } from './modules/search/infrastructure/elasticsearch/elasticsearch-chunk-search.adapter';
 import { Neo4jConnectionService } from './modules/graph/infrastructure/neo4j/neo4j-connection.service';
 import { Neo4jGraphStoreAdapter } from './modules/graph/infrastructure/neo4j/neo4j-graph-store.adapter';
 import { GraphStorePort } from './modules/graph/domain/ports/graph-store.port';
 import { Neo4jChunkSearchAdapter } from './modules/search/infrastructure/neo4j/neo4j-chunk-search.adapter';
+import { Neo4jDocumentRepository } from './modules/documents/infrastructure/neo4j/neo4j-document.repository';
 import { IngestDocumentUseCase } from './modules/ingestion/application/ingest-document.usecase';
 import { DeleteDocumentUseCase } from './modules/documents/application/delete-document.usecase';
 import { GenerateDocumentUseCase } from './modules/documents/application/generate-document.usecase';
@@ -34,8 +33,8 @@ import { ReindexChunksUseCase } from './modules/ingestion/application/reindex-ch
 import { GraphRagQueryUseCase } from './modules/query/application/graph-rag-query.usecase';
 import { SummarizeUseCase } from './modules/query/application/summarize.usecase';
 import { DocumentsController } from './modules/documents/presentation/documents.controller';
-import { MongoDatabaseService } from './modules/documents/infrastructure/mongo/mongo-database.service';
 import { SimpleChunkerService } from './modules/ingestion/application/simple-chunker.service';
+import { EmbeddingPort } from './modules/ingestion/domain/ports/embedding.port';
 import { DefaultFileTextExtractorAdapter } from './modules/ingestion/infrastructure/extractors/default-file-text-extractor.adapter';
 import { OllamaEmbeddingAdapter } from './modules/ingestion/infrastructure/ollama/ollama-embedding.adapter';
 import { OllamaGraphExtractorAdapter } from './modules/ingestion/infrastructure/ollama/ollama-graph-extractor.adapter';
@@ -55,8 +54,9 @@ import { RequireApiKey } from './common/decorators/require-api-key.decorator';
 import { FileUploadInterceptor } from './common/interceptors/file-upload.interceptor';
 import { ChecksumService } from './common/utils/checksum.service';
 import { StructuredLogger } from './common/logger/structured-logger.service';
-import { MongoChatHistoryRepository } from './modules/query/infrastructure/mongo/mongo-chat-history.repository';
-import { CHAT_HISTORY_REPOSITORY } from './shared/di.tokens';
+import { Neo4jChatHistoryRepository } from './modules/query/infrastructure/neo4j/neo4j-chat-history.repository';
+import { AuthModule } from './modules/auth/auth.module';
+import { AdminController } from './modules/admin/presentation/admin.controller';
 
 @Module({
   imports: [
@@ -95,15 +95,16 @@ import { CHAT_HISTORY_REPOSITORY } from './shared/di.tokens';
         ];
       },
     }),
+    AuthModule,
   ],
   controllers: [
     HealthController,
     DocumentsController,
     QueryController,
     IndexController,
+    AdminController,
   ],
   providers: [
-    MongoDatabaseService,
     Neo4jConnectionService,
     ApiKeyGuard,
     FileUploadInterceptor,
@@ -134,9 +135,9 @@ import { CHAT_HISTORY_REPOSITORY } from './shared/di.tokens';
     SummarizeUseCase,
     SimpleChunkerService,
     PromptTemplateService,
-    MongoChunkSearchAdapter,
-    ElasticsearchChunkSearchAdapter,
+    Neo4jDocumentRepository,
     Neo4jChunkSearchAdapter,
+    Neo4jChatHistoryRepository,
     DefaultFileTextExtractorAdapter,
     TemplateDocumentGeneratorAdapter,
     LocalAnswerGeneratorAdapter,
@@ -149,10 +150,9 @@ import { CHAT_HISTORY_REPOSITORY } from './shared/di.tokens';
     OllamaEmbeddingAdapter,
     OllamaGraphExtractorAdapter,
     OllamaAnswerGeneratorAdapter,
-    MongoChatHistoryRepository,
     {
       provide: CHAT_HISTORY_REPOSITORY,
-      useClass: MongoChatHistoryRepository,
+      useExisting: Neo4jChatHistoryRepository,
     },
     {
       provide: APP_GUARD,
@@ -160,29 +160,11 @@ import { CHAT_HISTORY_REPOSITORY } from './shared/di.tokens';
     },
     {
       provide: DOCUMENT_REPOSITORY,
-      useClass: MongoDocumentRepository,
+      useExisting: Neo4jDocumentRepository,
     },
     {
       provide: CHUNK_SEARCH_PORT,
-      inject: [ConfigService, MongoChunkSearchAdapter, ElasticsearchChunkSearchAdapter, Neo4jChunkSearchAdapter],
-      useFactory: (
-        configService: ConfigService<BrainConfig>,
-        mongoAdapter: MongoChunkSearchAdapter,
-        elasticAdapter: ElasticsearchChunkSearchAdapter,
-        neo4jAdapter: Neo4jChunkSearchAdapter,
-      ) => {
-        const searchEngine = configService.get<'mongo' | 'elasticsearch' | 'neo4j'>('app.searchEngine', {
-          infer: true,
-        });
-        switch (searchEngine) {
-          case 'elasticsearch':
-            return elasticAdapter;
-          case 'neo4j':
-            return neo4jAdapter;
-          default:
-            return mongoAdapter;
-        }
-      },
+      useExisting: Neo4jChunkSearchAdapter,
     },
     {
       provide: GRAPH_STORE_PORT,
@@ -299,18 +281,16 @@ export class AppModule implements OnModuleInit {
   private readonly logger = new Logger(AppModule.name);
 
   constructor(
-    private readonly configService: ConfigService<BrainConfig>,
+    @Inject(EMBEDDING_PORT)
+    private readonly embeddingPort: EmbeddingPort,
     @Inject(GRAPH_STORE_PORT)
     private readonly graphStore: GraphStorePort,
   ) {}
 
   async onModuleInit(): Promise<void> {
-    const searchEngine = this.configService.get('app.searchEngine', { infer: true });
-    if (searchEngine === 'neo4j') {
-      this.logger.log('Initializing Neo4j vector index for chunk embeddings...');
-      // 768 = nomic-embed-text default dimensions; will adapt if model changes
-      await this.graphStore.ensureVectorIndex(768);
-      this.logger.log('Neo4j vector index ready.');
-    }
+    this.logger.log('Initializing Neo4j vector index for chunk embeddings...');
+    const probeVector = await this.embeddingPort.embed('vector dimension probe');
+    await this.graphStore.ensureVectorIndex(probeVector.length);
+    this.logger.log(`Neo4j vector index ready (${probeVector.length} dimensions).`);
   }
 }

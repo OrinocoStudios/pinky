@@ -73,8 +73,8 @@ src/
 
 | Token | Default adapter | Selection |
 |-------|----------------|-----------|
-| `DOCUMENT_REPOSITORY` | `MongoDocumentRepository` | Fixed |
-| `CHUNK_SEARCH_PORT` | `MongoChunkSearchAdapter` | `SEARCH_ENGINE` config (mongo/elasticsearch) |
+| `DOCUMENT_REPOSITORY` | `Neo4jDocumentRepository` | Fixed |
+| `CHUNK_SEARCH_PORT` | `Neo4jChunkSearchAdapter` | Fixed |
 | `GRAPH_STORE_PORT` | `Neo4jGraphStoreAdapter` | Fixed |
 | `EMBEDDING_PORT` | `OllamaEmbeddingAdapter` | Fixed |
 | `GRAPH_EXTRACTOR_PORT` | `OllamaGraphExtractorAdapter` | Fixed |
@@ -91,5 +91,5 @@ test/
 ├── query.e2e-spec.ts        # Query + library scoping tests
 ├── multi-tenant.e2e-spec.ts # Tenant isolation tests
 ├── health.e2e-spec.ts       # Health endpoint test
-└── outbox-index.e2e-spec.ts # Outbox retry + reindex tests
+└── outbox-index.e2e-spec.ts # Reindex tests
 ```

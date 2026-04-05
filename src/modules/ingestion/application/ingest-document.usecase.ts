@@ -80,7 +80,7 @@ export class IngestDocumentUseCase {
 
     let created: DocumentRecord;
     try {
-      this.logger.log(`Creating document record in MongoDB: ${documentId}`);
+      this.logger.log(`Creating document record in Neo4j: ${documentId}`);
       created = await this.documentRepository.createDocument({
         documentId,
         tenantId: input.tenantId,
@@ -134,12 +134,9 @@ export class IngestDocumentUseCase {
         }
       }
 
-      this.logger.log(`Inserting chunks into MongoDB: ${chunks.length} chunks`);
+      this.logger.log(`Persisting chunks into Neo4j document store: ${chunks.length} chunks`);
       await this.documentRepository.addChunks(chunksWithEmbeddings);
-      
-      this.logger.log(`Saving chunks into Neo4j: ${chunks.length} chunks`);
-      await this.graphStore.saveChunks(chunksWithEmbeddings, input.tenantId, input.libraryId);
-      
+
       await this.documentRepository.updateDocumentStatus(documentId, 'EMBEDDED', 'PENDING');
 
       this.logger.log(`Extracting graph entities and relations...`);

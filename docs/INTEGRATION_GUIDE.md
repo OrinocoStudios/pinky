@@ -14,9 +14,9 @@ La API HTTP está documentada en [docs/API_REFERENCE.md](docs/API_REFERENCE.md).
 
 ## 2) Despliegue recomendado (aislamiento)
 
-El patrón recomendado hoy es **“una instancia por dominio/proyecto”**.
+El patrón recomendado hoy es **“una instancia por dominio/proyecto”** o despliegues compartidos con `tenantId` y `libraryId` bien definidos.
 
-Motivo: el buscador en Mongo funciona sobre el corpus global de chunks sin un filtro multi-tenant estricto dentro de un solo deployment. Para compartir infraestructura entre dominios se requiere un diseño multi-tenant (ver sección “Multi-tenant (opcional)”).
+Motivo: aunque Pinky ya opera en Neo4j-only y soporta scoping, una instancia dedicada sigue siendo el camino mas simple cuando los dominios no comparten contexto.
 
 ## 3) Variables de entorno mínimas
 
@@ -26,9 +26,7 @@ Partir de [`.env.example`](.env.example). En producción, como mínimo:
 - `API_KEY=<tu-api-key>`
 - `LLM_PROVIDER=openai` o `LLM_PROVIDER=anthropic` (en vez de `local`)
 - Conectividad a:
-  - `MONGODB_URI`, `MONGODB_DB`
   - `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`
-  - `REDIS_URL`
 - Modelos de Ollama (si usas Ollama para embeddings/extracción):
   - `OLLAMA_BASE_URL`
   - `OLLAMA_EMBEDDING_MODEL`
@@ -170,4 +168,3 @@ curl -X POST "http://localhost:8081/query" \
 - **Multi-biblioteca en queries**: el body de `POST /query` acepta `libraryIds: string[]` para consultar múltiples bibliotecas.
 - **Aislamiento completo**: documentos, chunks, embeddings, entidades y relaciones del grafo se filtran por `libraryId`.
 - **Backward-compatible**: servicios que no envían el header siguen funcionando exactamente igual.
-

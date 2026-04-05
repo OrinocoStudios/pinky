@@ -3,9 +3,12 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrometheusModule, makeCounterProvider, makeHistogramProvider } from '@willsoto/nestjs-prometheus';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { JwtService } from '@nestjs/jwt';
+import * as cookieParser from 'cookie-parser';
 
 import {
   ANSWER_GENERATOR_PORT,
+  CHAT_HISTORY_REPOSITORY,
   CHUNK_SEARCH_PORT,
   DOCUMENT_GENERATOR_PORT,
   DOCUMENT_REPOSITORY,
@@ -31,6 +34,7 @@ import { HealthController } from '../src/modules/health/health.controller';
 import { DocumentsController } from '../src/modules/documents/presentation/documents.controller';
 import { QueryController } from '../src/modules/query/presentation/query.controller';
 import { IndexController } from '../src/modules/index/presentation/index.controller';
+import { AdminController } from '../src/modules/admin/presentation/admin.controller';
 
 import { IngestDocumentUseCase } from '../src/modules/ingestion/application/ingest-document.usecase';
 import { DeleteDocumentUseCase } from '../src/modules/documents/application/delete-document.usecase';
@@ -40,11 +44,12 @@ import { GraphRagQueryUseCase } from '../src/modules/query/application/graph-rag
 import { SummarizeUseCase } from '../src/modules/query/application/summarize.usecase';
 import { SimpleChunkerService } from '../src/modules/ingestion/application/simple-chunker.service';
 import { PromptTemplateService } from '../src/modules/query/application/prompt-template.service';
+import { ChatHistoryRepositoryPort, ChatMessage } from '../src/modules/query/domain/ports/chat-history.repository.port';
 import { ChecksumService } from '../src/common/utils/checksum.service';
 import { StructuredLogger } from '../src/common/logger/structured-logger.service';
 import { ApiKeyGuard } from '../src/common/guards/api-key.guard';
-import { MongoDatabaseService } from '../src/modules/documents/infrastructure/mongo/mongo-database.service';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
+import { AuthModule } from '../src/modules/auth/auth.module';
 
 // ── In-memory Document Repository ──────────────────────────────
 export class InMemoryDocumentRepository implements DocumentRepositoryPort {
@@ -250,26 +255,44 @@ export class MockFileTextExtractor implements FileTextExtractorPort {
   }
 }
 
-// ── Mock MongoDatabaseService (for HealthController) ───────────
-export class MockMongoDatabaseService {
-  async onModuleInit(): Promise<void> {}
-  async onModuleDestroy(): Promise<void> {}
-  async ping(): Promise<number> {
-    return 1;
+// ── Mock ChatHistoryRepositoryPort ─────────────────────────────
+export class MockChatHistoryRepository implements ChatHistoryRepositoryPort {
+  messages: ChatMessage[] = [];
+
+  async saveMessage(message: Omit<ChatMessage, 'createdAt'>): Promise<ChatMessage> {
+    const saved = { ...message, createdAt: new Date() };
+    this.messages.push(saved);
+    return saved;
+  }
+
+  async getBySessionId(sessionId: string): Promise<ChatMessage[]> {
+    return this.messages.filter((message) => message.sessionId === sessionId);
+  }
+
+  async clearSession(sessionId: string): Promise<void> {
+    this.messages = this.messages.filter((message) => message.sessionId !== sessionId);
+  }
+
+  reset(): void {
+    this.messages = [];
   }
 }
 
 // ── Test Module Factory ────────────────────────────────────────
 export async function createTestApp(overrides?: {
-  app?: { enableMultiTenant?: boolean };
+  app?: { enableMultiTenant?: boolean; enableApiKeyAuth?: boolean };
+  auth?: { allowedAdminEmails?: string[]; enableDevLogin?: boolean };
 }): Promise<{
   app: INestApplication;
   repo: InMemoryDocumentRepository;
   graphStore: MockGraphStore;
+  chatHistory: MockChatHistoryRepository;
+  jwtService: JwtService;
 }> {
   const repo = new InMemoryDocumentRepository();
   const graphStore = new MockGraphStore();
   const chunkSearch = new MockChunkSearch(repo);
+  const chatHistory = new MockChatHistoryRepository();
 
   const moduleRef: TestingModule = await Test.createTestingModule({
     imports: [
@@ -281,11 +304,10 @@ export async function createTestApp(overrides?: {
               env: 'test',
               port: 8081,
               apiKey: 'test-api-key',
-              enableApiKeyAuth: false,
+              enableApiKeyAuth: overrides?.app?.enableApiKeyAuth ?? false,
               enableMultiTenant: overrides?.app?.enableMultiTenant ?? false,
               corsEnabled: false,
               corsOrigins: [],
-              searchEngine: 'mongo',
               objectStorePath: './data/objects',
               topK: 8,
               chunkSize: 500,
@@ -299,9 +321,24 @@ export async function createTestApp(overrides?: {
               allowedMimeTypes: ['text/plain'],
               enableChecksumValidation: true,
             },
-            mongo: { uri: 'mongodb://localhost:27017/test', dbName: 'test' },
+            auth: {
+              enableDevLogin: overrides?.auth?.enableDevLogin ?? false,
+              jwtSecret: 'test-auth-secret',
+              jwtExpiresIn: '8h',
+              cookieName: 'pinky_auth',
+              cookieSecure: false,
+              cookieSameSite: 'lax',
+              successUrl: 'http://localhost:5173',
+              failureUrl: 'http://localhost:5173/login?error=unauthorized',
+              allowedAdminEmails: overrides?.auth?.allowedAdminEmails ?? [],
+              googleClientId: 'test-google-client-id',
+              googleClientSecret: 'test-google-client-secret',
+              googleCallbackUrl: 'http://localhost:8081/auth/google/callback',
+              githubClientId: 'test-github-client-id',
+              githubClientSecret: 'test-github-client-secret',
+              githubCallbackUrl: 'http://localhost:8081/auth/github/callback',
+            },
             neo4j: { uri: 'bolt://localhost:7687', user: 'neo4j', password: 'test' },
-            redis: { url: 'redis://localhost:6379' },
             ollama: {
               baseUrl: 'http://localhost:11434',
               embeddingModel: 'mock-embed-model',
@@ -318,12 +355,14 @@ export async function createTestApp(overrides?: {
       }),
       PrometheusModule.register({ path: '/metrics', defaultMetrics: { enabled: false } }),
       ThrottlerModule.forRoot([{ name: 'default', ttl: 60000, limit: 1000 }]),
+      AuthModule,
     ],
     controllers: [
       HealthController,
       DocumentsController,
       QueryController,
       IndexController,
+      AdminController,
     ],
     providers: [
       IngestDocumentUseCase,
@@ -347,16 +386,17 @@ export async function createTestApp(overrides?: {
       { provide: GRAPH_EXTRACTOR_PORT, useValue: new MockGraphExtractor() },
       { provide: ANSWER_GENERATOR_PORT, useValue: new MockAnswerGenerator() },
       { provide: CHUNK_SEARCH_PORT, useValue: chunkSearch },
+      { provide: CHAT_HISTORY_REPOSITORY, useValue: chatHistory },
       { provide: DOCUMENT_GENERATOR_PORT, useValue: new MockDocumentGenerator() },
       { provide: FILE_TEXT_EXTRACTOR_PORT, useValue: new MockFileTextExtractor() },
-      { provide: MongoDatabaseService, useValue: new MockMongoDatabaseService() },
     ],
   }).compile();
 
   const app = moduleRef.createNestApplication();
+  app.use(cookieParser());
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
   app.useGlobalFilters(new HttpExceptionFilter());
   await app.init();
 
-  return { app, repo, graphStore };
+  return { app, repo, graphStore, chatHistory, jwtService: moduleRef.get(JwtService) };
 }

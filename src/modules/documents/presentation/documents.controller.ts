@@ -118,6 +118,7 @@ export class DocumentsController {
   }
 
   @Get()
+  @RequireApiKey()
   async listDocuments(
     @Headers('x-tenant-id') tenantHeader?: string,
     @Headers('x-library-id') libraryHeader?: string,

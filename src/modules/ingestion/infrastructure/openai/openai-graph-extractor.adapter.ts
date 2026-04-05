@@ -55,19 +55,31 @@ export class OpenAiGraphExtractorAdapter implements GraphExtractorPort {
       const chunkEntityIds = new Map<string, string>();
 
       for (const entity of extracted.entities) {
-        const entityId = `${entity.normalized ?? entity.name.toLowerCase()}::${documentId}::${chunk.chunkId}`;
+        if (!entity?.name || typeof entity.name !== 'string') {
+          continue;
+        }
+
+        const normalizedName =
+          typeof entity.normalized === 'string' && entity.normalized.trim().length > 0
+            ? entity.normalized.trim()
+            : entity.name.toLowerCase();
+        const entityId = `${normalizedName}::${documentId}::${chunk.chunkId}`;
         chunkEntityIds.set(entity.name, entityId);
 
         allEntities.push({
           entityId,
           type: entity.type || 'NamedEntity',
           name: entity.name,
-          normalized: entity.normalized ?? entity.name.toLowerCase(),
+          normalized: normalizedName,
           attributes: { sourceDocumentId: documentId, sourceChunkId: chunk.chunkId },
         });
       }
 
       for (const relationship of extracted.relationships) {
+        if (!relationship?.from || !relationship?.to) {
+          continue;
+        }
+
         const fromId =
           chunkEntityIds.get(relationship.from) ??
           this.makeEntityId(relationship.from, documentId, chunk.chunkId);
@@ -136,9 +148,24 @@ Rules: Use entity names exactly as they appear. Relationship "from" and "to" mus
       const raw = response.choices[0]?.message?.content?.trim() ?? '';
       const parsed = JSON.parse(this.extractJson(raw)) as ChunkExtraction;
 
-      if (!parsed.entities) parsed.entities = [];
-      if (!parsed.relationships) parsed.relationships = [];
-      return parsed;
+        if (!parsed.entities) parsed.entities = [];
+        if (!parsed.relationships) parsed.relationships = [];
+
+        parsed.entities = parsed.entities.filter(
+          (entity): entity is { name: string; type: string; normalized?: string } =>
+            Boolean(entity) && typeof entity.name === 'string' && entity.name.trim().length > 0,
+        );
+
+        parsed.relationships = parsed.relationships.filter(
+          (relationship): relationship is { from: string; to: string; type: string; confidence?: number } =>
+            Boolean(relationship) &&
+            typeof relationship.from === 'string' &&
+            relationship.from.trim().length > 0 &&
+            typeof relationship.to === 'string' &&
+            relationship.to.trim().length > 0,
+        );
+
+        return parsed;
     } catch (error: any) {
       const rawResponse = response?.choices?.[0]?.message?.content || 'NO_RESPONSE_CONTENT';
       this.logger.warn(

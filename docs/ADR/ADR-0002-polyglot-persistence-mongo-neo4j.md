@@ -1,8 +1,10 @@
 # ADR-0002: Persistencia Polyglot con MongoDB y Neo4j
 
-- **Estado**: Accepted
+- **Estado**: Superseded by ADR-0010
 - **Fecha**: 2026-02-24
 - **Decisores**: Equipo Backend / AI Architecture
+
+> Historico: este ADR describe una etapa anterior. La arquitectura vigente es Neo4j-only.
 
 ## Contexto
 

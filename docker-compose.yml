@@ -1,12 +1,4 @@
 services:
-  mongo-brain:
-    image: mongo:7
-    container_name: mongo-brain
-    ports:
-      - "27021:27017"
-    volumes:
-      - mongo-brain-data:/data/db
-
   neo4j-brain:
     image: neo4j:5
     container_name: neo4j-brain
@@ -18,15 +10,5 @@ services:
     volumes:
       - neo4j-brain-data:/data
 
-  redis-brain:
-    image: redis:7-alpine
-    container_name: redis-brain
-    ports:
-      - "6381:6379"
-    volumes:
-      - redis-brain-data:/data
-
 volumes:
-  mongo-brain-data:
   neo4j-brain-data:
-  redis-brain-data:

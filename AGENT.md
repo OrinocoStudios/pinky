@@ -2,7 +2,7 @@
 
 ## What is this project
 
-Pinky is a generic GraphRAG engine. It ingests documents, chunks them, generates embeddings (Ollama), extracts a knowledge graph (Ollama), persists everything (MongoDB + Neo4j), and answers questions with grounded citations via LLM (OpenAI/Anthropic/local).
+Pinky is a generic GraphRAG engine. It ingests documents, chunks them, generates embeddings (Ollama), extracts a knowledge graph (Ollama), persists everything in Neo4j, and answers questions with grounded citations via LLM (OpenAI/Anthropic/local).
 
 It is NOT a business application. Business logic (patients, trading strategies, etc.) lives in consuming services that call Pinky via HTTP.
 
@@ -15,7 +15,7 @@ src/modules/<module>/
 ├── domain/models/       # Types, interfaces — zero external deps
 ├── domain/ports/        # Contracts (interfaces) that infrastructure implements
 ├── application/         # Use cases — orchestrate ports, never import infrastructure
-├── infrastructure/      # Adapters (mongo, neo4j, ollama, openai, etc.)
+├── infrastructure/      # Adapters (neo4j, ollama, openai, anthropic, etc.)
 └── presentation/        # Controllers + DTOs — HTTP layer only
 ```
 
@@ -39,9 +39,9 @@ When adding a new feature that touches documents/chunks/graph, always propagate 
 
 ## Key patterns
 
-- **Outbox pattern** for MongoDB→Neo4j consistency. Events in `graph_sync_outbox` with retry + dead-letter.
+- **Neo4j-only persistence** — `Document`, `Chunk`, `Entity` y `ChatMessage` viven en un unico backend.
 - **Checksum idempotency** — SHA-256 of content, scoped by `tenantId + libraryId`.
-- **Provider factory** — `LLM_PROVIDER` and `SEARCH_ENGINE` select adapters at boot via factory in `app.module.ts`.
+- **Provider factory** — `LLM_PROVIDER` selects adapters at boot via factory in `app.module.ts`.
 
 ## Validation checklist (before committing)
 
@@ -71,8 +71,7 @@ Update when making changes:
 ## Tech stack reference
 
 - NestJS 11 / TypeScript 5.6 / Node 20
-- MongoDB (mongoose 8.7) — documents, chunks, embeddings, outbox
-- Neo4j (neo4j-driver 5.26) — knowledge graph
+- Neo4j (neo4j-driver 5.26) — documents, chunks, knowledge graph y chat history
 - Ollama — embeddings (`nomic-embed-text`) + graph extraction (`llama3.2`)
 - OpenAI / Anthropic — answer generation
 - Prometheus (`@willsoto/nestjs-prometheus`) — metrics at `/metrics`
