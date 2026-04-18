@@ -15,9 +15,10 @@ El despliegue se divide en **dos servicios Compose independientes**:
 
 La imagen de `brain-service` se construye y publica automáticamente en **GitHub Container Registry** (GHCR) mediante GitHub Actions. El flujo es:
 
-1. Push a `main` → CI (build + tests)
-2. CI pasa → Docker workflow construye y publica `ghcr.io/orinocostudios/pinky:latest`
-3. Dokploy hace pull de la imagen publicada
+1. Push a `main` → CI (build + unit + integración)
+2. Si todo pasa → workflow `Deploy` publica `ghcr.io/orinocostudios/pinky:main`, `latest` y `sha-<commit>`
+3. GitHub Actions dispara Dokploy por webhook/API
+4. Dokploy hace pull de la imagen publicada y redepliega
 
 Ollama se separa para poder moverlo a un servidor con GPU en el futuro sin cambiar nada en la app — solo cambiando `OLLAMA_BASE_URL`.
 
@@ -59,7 +60,7 @@ ollama list
 5. Ir a la pestaña **Environment** y configurar las variables (ver sección abajo).
 6. Click en **Save** y luego **Deploy**.
 
-El compose usa `image: ghcr.io/orinocostudios/pinky:latest` por defecto. Se puede cambiar con la variable `BRAIN_IMAGE` para apuntar a un tag específico (ej: un SHA de commit).
+El compose usa `image: ghcr.io/orinocostudios/pinky:latest` por defecto. Se recomienda cambiar `BRAIN_IMAGE` a `ghcr.io/orinocostudios/pinky:main` para flujo continuo o a `ghcr.io/orinocostudios/pinky:sha-<commit>` para rollback/version pinning.
 
 El servicio esperará a que Neo4j pase su healthcheck antes de arrancar.
 
@@ -108,6 +109,8 @@ El archivo `.env.production` en el repositorio contiene todas las variables disp
 ---
 
 ## Verificación post-despliegue
+
+Para flujo operativo completo de release, ver también [Proceso de subida a producción](./PRODUCTION_RELEASE.md).
 
 ### Health check
 
@@ -175,10 +178,9 @@ Los logs del servicio son JSON estructurado. Se pueden ver directamente en la UI
 ### Actualizar
 
 El flujo de actualización es automático:
-1. Push a `main` → GitHub Actions ejecuta CI (build + tests).
-2. Si CI pasa → se construye y publica la nueva imagen en GHCR.
-3. En Dokploy, click en **Deploy** en el servicio brain-service (hace pull de la imagen nueva).
+1. Push a `main` → GitHub Actions ejecuta CI (build + unit + integración).
+2. Si CI pasa → workflow `Deploy` publica la nueva imagen en GHCR.
+3. GitHub Actions llama webhook/API de Dokploy.
+4. Dokploy redepliega `brain-service` con la imagen nueva.
 
-Opcionalmente, se puede configurar un **webhook** en Dokploy para que el deploy sea totalmente automático tras cada push exitoso.
-
-Para pinear una versión específica, configurar `BRAIN_IMAGE=ghcr.io/orinocostudios/pinky:<sha>` en las variables de entorno.
+Para pinear una versión específica, configurar `BRAIN_IMAGE=ghcr.io/orinocostudios/pinky:sha-<commit>` en las variables de entorno.

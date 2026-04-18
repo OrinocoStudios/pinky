@@ -92,15 +92,16 @@ docker manifest inspect ghcr.io/orinocostudios/pinky:latest
 
 ## 6. Tags disponibles
 
-El pipeline genera dos tags por cada build:
+El pipeline de deploy genera tres tags por cada push exitoso a `main`:
 
-- **`latest`** — Siempre apunta a la última versión de `main`.
-- **`<sha>`** — SHA corto del commit (ej: `a1b2c3d`). Útil para rollbacks o pinear una versión.
+- **`main`** — Tag estable para producción continua.
+- **`latest`** — Alias opcional del último build exitoso de `main`.
+- **`sha-<commit>`** — SHA corto del commit (ej: `sha-a1b2c3d`). Útil para rollbacks o pinear una versión.
 
 Para usar un tag específico en Dokploy, configurar la variable de entorno:
 
 ```env
-BRAIN_IMAGE=ghcr.io/orinocostudios/pinky:a1b2c3d
+BRAIN_IMAGE=ghcr.io/orinocostudios/pinky:sha-a1b2c3d
 ```
 
 ## 7. Troubleshooting
@@ -118,6 +119,12 @@ BRAIN_IMAGE=ghcr.io/orinocostudios/pinky:a1b2c3d
 
 ### La imagen no aparece en Packages
 
-- Verificar que el workflow CI pasó correctamente (es prerrequisito del workflow Docker).
-- Revisar los logs del workflow **Build & Push Docker Image** en la pestaña **Actions** del repositorio.
-- El workflow Docker solo se ejecuta en pushes a `main`, no en PRs.
+- Verificar que el workflow CI pasó correctamente (es prerrequisito del workflow `Deploy`).
+- Revisar los logs del workflow `Deploy` en la pestaña **Actions** del repositorio.
+- El workflow de deploy solo se ejecuta en pushes a `main`, no en PRs.
+
+## 8. Secrets esperados por GitHub Actions
+
+- `DOKPLOY_WEBHOOK_URL`: webhook o endpoint HTTP que dispara el redeploy en Dokploy.
+
+`GITHUB_TOKEN` se usa automáticamente para publicar en GHCR, siempre que el repositorio tenga permisos `Read and write` para workflows.

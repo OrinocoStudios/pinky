@@ -17,6 +17,7 @@ import { GraphExtractorPort } from '../domain/ports/graph-extractor.port';
 import { SimpleChunkerService } from './simple-chunker.service';
 import { ChecksumService } from '../../../common/utils/checksum.service';
 import { BrainConfig } from '../../../config/configuration';
+import { StructuredLogger } from '../../../common/logger/structured-logger.service';
 
 export type IngestDocumentInput = {
   tenantId?: string;
@@ -45,22 +46,25 @@ export class IngestDocumentUseCase {
     private readonly configService: ConfigService<BrainConfig>,
     @InjectMetric('brain_documents_ingested_total')
     private readonly documentsIngestedCounter: Counter<string>,
+    private readonly events: StructuredLogger,
   ) {}
 
   async execute(input: IngestDocumentInput): Promise<DocumentRecord> {
     this.logger.log(`Ingesting document: ${input.title || 'untitled'}`);
+    const startedAt = Date.now();
     const checksum = this.checksumService.calculate(input.rawText);
+    const ingestKey = this.buildIngestKey(checksum, input.tenantId, input.libraryId);
     const enableChecksum = this.configService.get('app.enableChecksumValidation', { infer: true });
-    
+
     if (enableChecksum) {
       try {
-        const existing = await this.documentRepository.findDocumentByChecksum(
-          checksum,
+        const existing = await this.documentRepository.findDocumentByIngestKey(
+          ingestKey,
           input.tenantId,
           input.libraryId,
         );
         if (existing) {
-          this.logger.log(`Document already exists (checksum match): ${existing.documentId}`);
+          this.logger.log(`Document already exists (ingestKey match): ${existing.documentId}`);
           return existing;
         }
       } catch (err) {
@@ -83,6 +87,7 @@ export class IngestDocumentUseCase {
       this.logger.log(`Creating document record in Neo4j: ${documentId}`);
       created = await this.documentRepository.createDocument({
         documentId,
+        ingestKey,
         tenantId: input.tenantId,
         libraryId: input.libraryId,
         title: input.title,
@@ -94,15 +99,15 @@ export class IngestDocumentUseCase {
         metadata: docMetadata,
       });
     } catch (error) {
-      if (enableChecksum && this.isDuplicateChecksumError(error)) {
-        const existing = await this.documentRepository.findDocumentByChecksum(
-          checksum,
+      if (enableChecksum && this.isDuplicateIngestKeyError(error)) {
+        const existing = await this.documentRepository.findDocumentByIngestKey(
+          ingestKey,
           input.tenantId,
           input.libraryId,
         );
         if (existing) {
           this.logger.log(
-            `Document already exists after concurrent insert attempt (checksum match): ${existing.documentId}`,
+            `Document already exists after concurrent insert attempt (ingestKey match): ${existing.documentId}`,
           );
           return existing;
         }
@@ -151,10 +156,27 @@ export class IngestDocumentUseCase {
       
       await this.documentRepository.updateDocumentStatus(documentId, 'READY', 'SYNCED');
       this.documentsIngestedCounter.inc();
+      this.events.event('DocumentIngested', {
+        documentId,
+        tenantId: input.tenantId,
+        libraryId: input.libraryId,
+        chunks: chunks.length,
+        embeddingModel,
+        extractionModel,
+        latencyMs: Date.now() - startedAt,
+        sourceKind: input.source?.kind,
+      });
       this.logger.log(`Document ingestion completed successfully: ${documentId}`);
     } catch (error) {
       this.logger.error(`Error during ingestion pipeline for document ${documentId}: ${error instanceof Error ? error.message : String(error)}`);
       await this.documentRepository.updateDocumentStatus(documentId, 'ERROR', 'FAILED');
+      this.events.event('DocumentIngestFailed', {
+        documentId,
+        tenantId: input.tenantId,
+        libraryId: input.libraryId,
+        latencyMs: Date.now() - startedAt,
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw new InternalServerErrorException({
         message: 'Document ingestion failed',
         documentId,
@@ -165,11 +187,21 @@ export class IngestDocumentUseCase {
     return (await this.documentRepository.findDocumentById(documentId)) ?? created;
   }
 
-  private isDuplicateChecksumError(error: unknown): boolean {
+  private buildIngestKey(checksum: string, tenantId?: string, libraryId?: string): string {
+    return this.checksumService.calculate(`${tenantId ?? ''}|${libraryId ?? ''}|${checksum}`);
+  }
+
+  private isDuplicateIngestKeyError(error: unknown): boolean {
     if (!error || typeof error !== 'object') {
       return false;
     }
-    const maybeError = error as { code?: number; message?: string };
-    return maybeError.code === 11000 && maybeError.message?.includes('checksum') === true;
+    const maybeError = error as { code?: number | string; message?: string };
+    const message = maybeError.message ?? '';
+    return (
+      maybeError.code === 11000 ||
+      /constraint/i.test(message) ||
+      /ingestkey/i.test(message) ||
+      /document_ingest_key/i.test(message)
+    );
   }
 }

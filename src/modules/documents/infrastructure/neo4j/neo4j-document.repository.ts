@@ -15,6 +15,9 @@ export class Neo4jDocumentRepository implements DocumentRepositoryPort, OnModule
         'CREATE CONSTRAINT document_document_id IF NOT EXISTS FOR (d:Document) REQUIRE d.documentId IS UNIQUE',
       );
       await session.run(
+        'CREATE CONSTRAINT document_ingest_key IF NOT EXISTS FOR (d:Document) REQUIRE d.ingestKey IS UNIQUE',
+      );
+      await session.run(
         'CREATE CONSTRAINT chunk_chunk_id IF NOT EXISTS FOR (c:Chunk) REQUIRE c.chunkId IS UNIQUE',
       );
       await session.run('CREATE INDEX document_checksum IF NOT EXISTS FOR (d:Document) ON (d.checksum)');
@@ -41,6 +44,7 @@ export class Neo4jDocumentRepository implements DocumentRepositoryPort, OnModule
         `
         CREATE (d:Document {
           documentId: $documentId,
+          ingestKey: $ingestKey,
           tenantId: $tenantId,
           libraryId: $libraryId,
           title: $title,
@@ -252,6 +256,30 @@ export class Neo4jDocumentRepository implements DocumentRepositoryPort, OnModule
     }
   }
 
+  async findDocumentByIngestKey(
+    ingestKey: string,
+    tenantId?: string,
+    libraryId?: string,
+  ): Promise<DocumentRecord | null> {
+    const session = this.neo4j.getSession();
+    try {
+      const result = await session.run(
+        `
+        MATCH (d:Document {ingestKey: $ingestKey})
+        WHERE ($tenantId IS NULL OR d.tenantId = $tenantId)
+          AND ($libraryId IS NULL OR d.libraryId = $libraryId)
+        RETURN d
+        LIMIT 1
+        `,
+        { ingestKey, tenantId: tenantId ?? null, libraryId: libraryId ?? null },
+      );
+      const record = result.records[0];
+      return record ? this.mapDocumentNode(record.get('d').properties) : null;
+    } finally {
+      await session.close();
+    }
+  }
+
   async deleteDocument(documentId: string): Promise<void> {
     const session = this.neo4j.getSession();
     try {
@@ -298,6 +326,7 @@ export class Neo4jDocumentRepository implements DocumentRepositoryPort, OnModule
   private toDocumentParams(document: DocumentRecord) {
     return {
       documentId: document.documentId,
+      ingestKey: document.ingestKey ?? null,
       tenantId: document.tenantId ?? null,
       libraryId: document.libraryId ?? null,
       title: document.title ?? null,
@@ -334,6 +363,7 @@ export class Neo4jDocumentRepository implements DocumentRepositoryPort, OnModule
   private mapDocumentNode(node: Record<string, unknown>): DocumentRecord {
     return {
       documentId: String(node.documentId),
+      ingestKey: this.asOptionalString(node.ingestKey),
       tenantId: this.asOptionalString(node.tenantId),
       libraryId: this.asOptionalString(node.libraryId),
       title: this.asOptionalString(node.title),

@@ -1,24 +1,14 @@
 import { FormEvent, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Navigate } from 'react-router-dom';
-import { queryClient } from '../app/query-client';
-import { apiFetch } from '../lib/api';
-import { getCurrentUser, getProviderLoginUrl } from '../lib/auth';
+import { getProviderLoginUrl } from '../lib/auth';
+import { useAuthProviders, useCurrentUser, useDevLogin } from '../hooks/use-auth';
 
 export function LoginPage() {
   const [devEmail, setDevEmail] = useState('');
   const [devError, setDevError] = useState<string | null>(null);
-  const query = useQuery({
-    queryKey: ['auth', 'me'],
-    queryFn: getCurrentUser,
-    retry: false,
-  });
-
-  const providersQuery = useQuery({
-    queryKey: ['auth', 'providers'],
-    queryFn: () => apiFetch<{ providers: string[]; devLogin: boolean }>('/auth/providers'),
-    retry: false,
-  });
+  const query = useCurrentUser();
+  const providersQuery = useAuthProviders();
+  const devLoginMutation = useDevLogin();
 
   if (query.data) {
     return <Navigate to="/" replace />;
@@ -29,11 +19,7 @@ export function LoginPage() {
     setDevError(null);
 
     try {
-      await apiFetch('/auth/dev/login', {
-        method: 'POST',
-        body: JSON.stringify({ email: devEmail }),
-      });
-      await queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+      await devLoginMutation.mutateAsync({ email: devEmail });
     } catch (error) {
       setDevError(error instanceof Error ? error.message : 'Dev login failed');
     }
@@ -69,8 +55,8 @@ export function LoginPage() {
               value={devEmail}
               onChange={(event) => setDevEmail(event.target.value)}
             />
-            <button className="secondary-button" type="submit" disabled={!devEmail.trim()}>
-              Sign in without OAuth
+            <button className="secondary-button" type="submit" disabled={!devEmail.trim() || devLoginMutation.isPending}>
+              {devLoginMutation.isPending ? 'Signing in...' : 'Sign in without OAuth'}
             </button>
             {devError ? <p className="error-text">{devError}</p> : null}
           </form>

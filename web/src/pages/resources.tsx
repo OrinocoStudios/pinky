@@ -1,27 +1,16 @@
-import { useQuery } from '@tanstack/react-query';
-import { apiFetch } from '../lib/api';
-
-type HealthResponse = {
-  status: string;
-  timestamp: string;
-  uptime: number;
-  services: Record<string, { status: string; latency_ms?: number; provider?: string }>;
-  service: string;
-  latency_ms: number;
-};
+import { PageStateError } from '../components/ui/page-state-error';
+import { PageStateLoading } from '../components/ui/page-state-loading';
+import { useHealth } from '../hooks/use-health';
 
 export function ResourcesPage() {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['health'],
-    queryFn: () => apiFetch<HealthResponse>('/health'),
-  });
+  const { data, isLoading, error } = useHealth();
 
   if (isLoading) {
-    return <div>Loading resources...</div>;
+    return <PageStateLoading message="Loading resources..." />;
   }
 
   if (error || !data) {
-    return <div>Unable to load resources.</div>;
+    return <PageStateError title="Unable to load resources." />;
   }
 
   return (

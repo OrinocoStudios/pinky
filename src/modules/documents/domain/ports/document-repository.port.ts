@@ -29,5 +29,10 @@ export interface DocumentRepositoryPort {
     tenantId?: string,
     libraryId?: string,
   ): Promise<DocumentRecord | null>;
+  findDocumentByIngestKey(
+    ingestKey: string,
+    tenantId?: string,
+    libraryId?: string,
+  ): Promise<DocumentRecord | null>;
   deleteDocument(documentId: string): Promise<void>;
 }

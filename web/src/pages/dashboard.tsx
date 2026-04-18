@@ -1,42 +1,17 @@
-import { useQuery } from '@tanstack/react-query';
-import { apiFetch } from '../lib/api';
-
-type OverviewResponse = {
-  health: {
-    status: string;
-    uptime: number;
-    services: {
-      neo4j: { status: string; latency_ms?: number };
-      llm: { status: string; provider: string };
-    };
-    latency_ms: number;
-  };
-  documents: {
-    total: number;
-    byStatus: Record<string, number>;
-    recent: Array<{
-      documentId: string;
-      title?: string;
-      status: string;
-      graphSyncStatus: string;
-      updatedAt: string;
-      libraryId?: string;
-    }>;
-  };
-};
+import { useAdminOverview } from '../hooks/use-admin-overview';
+import { PageStateError } from '../components/ui/page-state-error';
+import { PageStateLoading } from '../components/ui/page-state-loading';
+import { StatusBadge } from '../components/ui/status-badge';
 
 export function DashboardPage() {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['admin', 'overview'],
-    queryFn: () => apiFetch<OverviewResponse>('/admin/overview'),
-  });
+  const { data, isLoading, error } = useAdminOverview();
 
   if (isLoading) {
-    return <div>Loading dashboard...</div>;
+    return <PageStateLoading message="Loading dashboard..." />;
   }
 
   if (error || !data) {
-    return <div>Unable to load dashboard.</div>;
+    return <PageStateError title="Unable to load dashboard." />;
   }
 
   return (
@@ -118,7 +93,7 @@ export function DashboardPage() {
               {data.documents.recent.map((document) => (
                 <tr key={document.documentId}>
                   <td>{document.title || document.documentId}</td>
-                  <td><span className={`status-badge status-${document.status.toLowerCase()}`}>{document.status}</span></td>
+                   <td><StatusBadge status={document.status} /></td>
                   <td>{document.graphSyncStatus}</td>
                   <td>{document.libraryId || '-'}</td>
                   <td>{new Date(document.updatedAt).toLocaleString()}</td>

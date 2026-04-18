@@ -95,6 +95,46 @@ export type BrainConfig = {
   ollama: OllamaConfig;
 };
 
+const INSECURE_DEFAULTS = {
+  apiKey: new Set(['', 'change-me-in-production']),
+  jwtSecret: new Set(['change-me-auth-secret']),
+  neo4jPassword: new Set(['neo4j_password']),
+};
+
+/**
+ * Fails fast when running in production with insecure default secrets.
+ * Intentionally permissive in non-production environments to keep DX fast.
+ */
+export function validateProductionConfig(config: BrainConfig): void {
+  if (config.app.env !== 'production') {
+    return;
+  }
+
+  const problems: string[] = [];
+
+  if (config.app.enableApiKeyAuth && INSECURE_DEFAULTS.apiKey.has(config.app.apiKey)) {
+    problems.push('API_KEY must be set to a strong value (ENABLE_API_KEY_AUTH=true).');
+  }
+
+  if (INSECURE_DEFAULTS.jwtSecret.has(config.auth.jwtSecret)) {
+    problems.push('AUTH_JWT_SECRET must be overridden in production.');
+  }
+
+  if (INSECURE_DEFAULTS.neo4jPassword.has(config.neo4j.password)) {
+    problems.push('NEO4J_PASSWORD must be overridden in production.');
+  }
+
+  if (config.auth.cookieSameSite === 'none' && !config.auth.cookieSecure) {
+    problems.push('AUTH_COOKIE_SECURE must be true when AUTH_COOKIE_SAME_SITE=none.');
+  }
+
+  if (problems.length > 0) {
+    throw new Error(
+      `[config] Insecure production configuration:\n  - ${problems.join('\n  - ')}`,
+    );
+  }
+}
+
 export default (): BrainConfig => ({
   app: {
     env: process.env.NODE_ENV ?? 'development',

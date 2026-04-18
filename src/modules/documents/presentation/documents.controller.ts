@@ -40,6 +40,7 @@ export class DocumentsController {
   ) {}
 
   @Post('text')
+  @Throttle({ ingest: {} })
   @RequireApiKey()
   async ingestText(
     @Body() body: IngestTextDocumentDto,
@@ -59,6 +60,7 @@ export class DocumentsController {
   }
 
   @Post('generate')
+  @Throttle({ ingest: {} })
   @RequireApiKey()
   async generateDocument(
     @Body() body: GenerateDocumentDto,
@@ -118,6 +120,7 @@ export class DocumentsController {
   }
 
   @Get()
+  @Throttle({ default: {} })
   @RequireApiKey()
   async listDocuments(
     @Headers('x-tenant-id') tenantHeader?: string,

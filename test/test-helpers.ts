@@ -1,8 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { PrometheusModule, makeCounterProvider, makeHistogramProvider } from '@willsoto/nestjs-prometheus';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { JwtService } from '@nestjs/jwt';
 import * as cookieParser from 'cookie-parser';
 
@@ -48,6 +49,7 @@ import { ChatHistoryRepositoryPort, ChatMessage } from '../src/modules/query/dom
 import { ChecksumService } from '../src/common/utils/checksum.service';
 import { StructuredLogger } from '../src/common/logger/structured-logger.service';
 import { ApiKeyGuard } from '../src/common/guards/api-key.guard';
+import { FileUploadInterceptor } from '../src/common/interceptors/file-upload.interceptor';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { AuthModule } from '../src/modules/auth/auth.module';
 
@@ -55,8 +57,13 @@ import { AuthModule } from '../src/modules/auth/auth.module';
 export class InMemoryDocumentRepository implements DocumentRepositoryPort {
   documents: DocumentRecord[] = [];
   chunks: DocumentChunk[] = [];
+  failNextCreateWithDuplicate = false;
 
   async createDocument(input: Omit<DocumentRecord, 'createdAt' | 'updatedAt'>): Promise<DocumentRecord> {
+    if (this.failNextCreateWithDuplicate) {
+      this.failNextCreateWithDuplicate = false;
+      throw new Error('document_ingest_key constraint failed for ingestKey');
+    }
     const now = new Date().toISOString();
     const doc: DocumentRecord = { ...input, createdAt: now, updatedAt: now };
     this.documents.push(doc);
@@ -162,6 +169,21 @@ export class InMemoryDocumentRepository implements DocumentRepositoryPort {
     );
   }
 
+  async findDocumentByIngestKey(
+    ingestKey: string,
+    tenantId?: string,
+    libraryId?: string,
+  ): Promise<DocumentRecord | null> {
+    return (
+      this.documents.find(
+        (document) =>
+          document.ingestKey === ingestKey &&
+          (!tenantId || document.tenantId === tenantId) &&
+          (!libraryId || document.libraryId === libraryId),
+      ) ?? null
+    );
+  }
+
   async deleteDocument(documentId: string): Promise<void> {
     this.chunks = this.chunks.filter((c) => c.documentId !== documentId);
     this.documents = this.documents.filter((d) => d.documentId !== documentId);
@@ -170,6 +192,7 @@ export class InMemoryDocumentRepository implements DocumentRepositoryPort {
   reset(): void {
     this.documents = [];
     this.chunks = [];
+    this.failNextCreateWithDuplicate = false;
   }
 }
 
@@ -278,10 +301,20 @@ export class MockChatHistoryRepository implements ChatHistoryRepositoryPort {
   }
 }
 
+export type ThrottlingOverrides = {
+  enabled: boolean;
+  ttl?: number;
+  defaultLimit?: number;
+  queryLimit?: number;
+  uploadLimit?: number;
+  ingestLimit?: number;
+};
+
 // ── Test Module Factory ────────────────────────────────────────
 export async function createTestApp(overrides?: {
   app?: { enableMultiTenant?: boolean; enableApiKeyAuth?: boolean };
   auth?: { allowedAdminEmails?: string[]; enableDevLogin?: boolean };
+  throttling?: ThrottlingOverrides;
 }): Promise<{
   app: INestApplication;
   repo: InMemoryDocumentRepository;
@@ -293,6 +326,20 @@ export async function createTestApp(overrides?: {
   const graphStore = new MockGraphStore();
   const chunkSearch = new MockChunkSearch(repo);
   const chatHistory = new MockChatHistoryRepository();
+
+  const throttling = overrides?.throttling;
+  const throttlerTtl = throttling?.ttl ?? 60000;
+  const throttlerModule = throttling?.enabled
+    ? ThrottlerModule.forRoot([
+        { name: 'default', ttl: throttlerTtl, limit: throttling.defaultLimit ?? 1000 },
+        { name: 'query', ttl: throttlerTtl, limit: throttling.queryLimit ?? 1000 },
+        { name: 'upload', ttl: throttlerTtl, limit: throttling.uploadLimit ?? 1000 },
+        { name: 'ingest', ttl: throttlerTtl, limit: throttling.ingestLimit ?? 1000 },
+      ])
+    : ThrottlerModule.forRoot([{ name: 'default', ttl: 60000, limit: 1000 }]);
+  const throttlerGuardProvider = throttling?.enabled
+    ? [{ provide: APP_GUARD, useClass: ThrottlerGuard }]
+    : [];
 
   const moduleRef: TestingModule = await Test.createTestingModule({
     imports: [
@@ -354,7 +401,7 @@ export async function createTestApp(overrides?: {
         ],
       }),
       PrometheusModule.register({ path: '/metrics', defaultMetrics: { enabled: false } }),
-      ThrottlerModule.forRoot([{ name: 'default', ttl: 60000, limit: 1000 }]),
+      throttlerModule,
       AuthModule,
     ],
     controllers: [
@@ -376,6 +423,7 @@ export async function createTestApp(overrides?: {
       ChecksumService,
       StructuredLogger,
       ApiKeyGuard,
+      FileUploadInterceptor,
       makeCounterProvider({ name: 'brain_documents_ingested_total', help: 'test' }),
       makeCounterProvider({ name: 'brain_queries_total', help: 'test' }),
       makeCounterProvider({ name: 'brain_query_errors_total', help: 'test' }),
@@ -389,6 +437,7 @@ export async function createTestApp(overrides?: {
       { provide: CHAT_HISTORY_REPOSITORY, useValue: chatHistory },
       { provide: DOCUMENT_GENERATOR_PORT, useValue: new MockDocumentGenerator() },
       { provide: FILE_TEXT_EXTRACTOR_PORT, useValue: new MockFileTextExtractor() },
+      ...throttlerGuardProvider,
     ],
   }).compile();
 

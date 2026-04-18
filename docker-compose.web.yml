@@ -1,0 +1,26 @@
+services:
+  web:
+    image: ${WEB_IMAGE:-ghcr.io/orinocostudios/pinky-web:latest}
+    restart: always
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - dokploy-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+        reservations:
+          cpus: "0.1"
+          memory: 32M
+
+networks:
+  dokploy-network:
+    external: true

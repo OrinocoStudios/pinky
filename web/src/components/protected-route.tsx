@@ -1,16 +1,13 @@
-import { useQuery } from '@tanstack/react-query';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { getCurrentUser } from '../lib/auth';
+import { PageStateLoading } from './ui/page-state-loading';
+import { useCurrentUser } from '../hooks/use-auth';
 
 export function ProtectedRoute() {
   const location = useLocation();
-  const query = useQuery({
-    queryKey: ['auth', 'me'],
-    queryFn: getCurrentUser,
-  });
+  const query = useCurrentUser();
 
   if (query.isLoading) {
-    return <div className="screen-center">Checking session...</div>;
+    return <div className="screen-center"><PageStateLoading message="Checking session..." /></div>;
   }
 
   if (query.isError) {

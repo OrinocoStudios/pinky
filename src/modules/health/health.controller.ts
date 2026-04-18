@@ -4,6 +4,15 @@ import { GraphStorePort } from '../graph/domain/ports/graph-store.port';
 import { GRAPH_STORE_PORT } from '../../shared/di.tokens';
 import { BrainConfig } from '../../config/configuration';
 
+type ServiceStatus = {
+  status: 'up' | 'down' | 'degraded' | 'configured' | 'unknown';
+  latency_ms?: number;
+  provider?: string;
+  message?: string;
+};
+
+const LLM_PING_TIMEOUT_MS = 3000;
+
 @Controller()
 export class HealthController {
   constructor(
@@ -18,7 +27,7 @@ export class HealthController {
     const timestamp = new Date().toISOString();
     const uptime = Math.floor(process.uptime());
 
-    const services: Record<string, { status: string; latency_ms?: number }> = {};
+    const services: Record<string, ServiceStatus> = {};
 
     try {
       const neoStart = Date.now();
@@ -28,13 +37,11 @@ export class HealthController {
       services.neo4j = { status: 'down' };
     }
 
-    const llmProvider = this.configService.get('llm.provider', { infer: true });
-    (services as Record<string, unknown>).llm = {
-      status: llmProvider ? 'configured' : 'unknown',
-      provider: llmProvider ?? 'none',
-    };
+    services.llm = await this.probeLlm();
 
-    const allUp = services.neo4j?.status === 'up';
+    const allUp =
+      services.neo4j?.status === 'up' &&
+      (services.llm?.status === 'up' || services.llm?.status === 'configured');
     const status = allUp ? 'ok' : 'degraded';
 
     return {
@@ -45,5 +52,97 @@ export class HealthController {
       service: 'brain-service',
       latency_ms: Date.now() - startTime,
     };
+  }
+
+  private async probeLlm(): Promise<ServiceStatus> {
+    const provider = this.configService.get('llm.provider', { infer: true });
+    if (!provider) {
+      return { status: 'unknown', provider: 'none' };
+    }
+
+    if (provider === 'openai') {
+      const openai = this.configService.get('llm.openai', { infer: true });
+      const baseUrl = openai?.baseUrl;
+      if (!baseUrl) {
+        return { status: 'configured', provider };
+      }
+      return this.pingOpenAiCompatible(baseUrl, openai?.apiKey, provider);
+    }
+
+    if (provider === 'ollama') {
+      const ollama = this.configService.get('ollama', { infer: true });
+      if (!ollama?.baseUrl) {
+        return { status: 'configured', provider };
+      }
+      return this.pingOllama(ollama.baseUrl, ollama.apiKey, provider);
+    }
+
+    return { status: 'configured', provider };
+  }
+
+  private async pingOpenAiCompatible(
+    baseUrl: string,
+    apiKey: string | undefined,
+    provider: string,
+  ): Promise<ServiceStatus> {
+    const headers: Record<string, string> = { accept: 'application/json' };
+    if (apiKey) {
+      headers['authorization'] = `Bearer ${apiKey}`;
+    }
+
+    return this.timedProbe(provider, async (signal) => {
+      const response = await fetch(`${baseUrl.replace(/\/$/, '')}/models`, {
+        method: 'GET',
+        headers,
+        signal,
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    });
+  }
+
+  private async pingOllama(
+    baseUrl: string,
+    apiKey: string | undefined,
+    provider: string,
+  ): Promise<ServiceStatus> {
+    const headers: Record<string, string> = { accept: 'application/json' };
+    if (apiKey) {
+      headers['authorization'] = `Bearer ${apiKey}`;
+    }
+
+    return this.timedProbe(provider, async (signal) => {
+      const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/tags`, {
+        method: 'GET',
+        headers,
+        signal,
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    });
+  }
+
+  private async timedProbe(
+    provider: string,
+    run: (signal: AbortSignal) => Promise<void>,
+  ): Promise<ServiceStatus> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), LLM_PING_TIMEOUT_MS);
+    const start = Date.now();
+    try {
+      await run(controller.signal);
+      return { status: 'up', provider, latency_ms: Date.now() - start };
+    } catch (error) {
+      return {
+        status: 'down',
+        provider,
+        latency_ms: Date.now() - start,
+        message: error instanceof Error ? error.message : 'unknown error',
+      };
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }

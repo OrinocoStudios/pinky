@@ -76,6 +76,25 @@ describe('Documents (e2e)', () => {
       expect(repo.documents).toHaveLength(1);
     });
 
+    it('should allow same rawText in different libraries', async () => {
+      const text = 'Scoped idempotency text';
+
+      const first = await request(app.getHttpServer())
+        .post('/documents/text')
+        .set('X-Library-Id', 'lib-a')
+        .send({ title: 'First', rawText: text })
+        .expect(201);
+
+      const second = await request(app.getHttpServer())
+        .post('/documents/text')
+        .set('X-Library-Id', 'lib-b')
+        .send({ title: 'Second', rawText: text })
+        .expect(201);
+
+      expect(second.body.documentId).not.toBe(first.body.documentId);
+      expect(repo.documents).toHaveLength(2);
+    });
+
     it('should reject unknown properties (forbidNonWhitelisted)', async () => {
       await request(app.getHttpServer())
         .post('/documents/text')

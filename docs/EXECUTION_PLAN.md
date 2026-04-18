@@ -1,146 +1,261 @@
-# Execution Plan - Brain Service
+# Execution Plan - Pinky Cloud Readiness
 
 ## Objetivo
 
-Evolucionar `brain_service` como API independiente por instancia (un servicio por dominio/proyecto), con ingesta documental robusta y consulta GraphRAG con grounding en grafo.
+Dejar `pinky` funcional en nube con tres capacidades coordinadas:
 
-## Fuente base
+- `pinky-mcp` offline-first con cola SQLite y sincronización remota gradual.
+- backend remoto con ingesta documental realmente idempotente ante retries y concurrencia.
+- pipeline CI/CD con GitHub Actions, publicación en GHCR y despliegue automático vía Dokploy.
 
-Este plan consolida y limpia el contexto del plan original `memoria_agnostica_contexto_c6131274.plan.md`, alineándolo al estado real del código en `memory_architecture/brain_service`.
+## Alcance
 
-> Nota: este documento contiene contexto historico. La arquitectura vigente ya no es polyglot ni usa outbox; el estado actual del runtime es Neo4j-only.
+Este plan cubre:
 
-## Estado actual (alineado a codigo)
+- confiabilidad extremo a extremo entre `pinky-mcp` y backend remoto,
+- endurecimiento del contrato de ingesta documental,
+- automatización de build, test, publicación y despliegue,
+- validación operativa y documentación de rollout/rollback.
+
+No cubre en esta iteración:
+
+- nuevos endpoints funcionales ajenos a ingesta/sync,
+- rediseño de GraphRAG,
+- migraciones de proveedor LLM o arquitectura distinta a `Neo4j-only`.
+
+## Estado actual
 
 ### Completado
 
-- API base operativa:
+- Backend remoto `pinky` operativo con `Neo4j-only`.
+- API documental base:
   - `GET /health`
   - `POST /documents/text`
   - `POST /documents/upload`
+  - `POST /documents/generate`
   - `GET /documents`
-  - `POST /outbox/retry`
+  - `DELETE /documents/:id`
   - `POST /query`
-- Arquitectura hexagonal inicial (domain/application/infrastructure/presentation).
-- Persistencia polyglot base:
-  - MongoDB para `documents`, `chunks`, `graph_sync_outbox`.
-  - Neo4j para `Document`, `Entity`, `MENTIONS`, `RELATED`.
-- Ingesta con extracción multi-formato inicial (`txt/md/json/csv/pdf/docx`).
-- Consistencia Mongo->Neo4j con outbox + retry.
-- Pipeline GraphRAG inicial (`fastContext` + `truthFacts` + prompt grounded).
+- `pinky-mcp` ya soporta escritura local en SQLite, cola `sync_queue`, retries con backoff y lectura combinada local/remoto.
+- `docker-compose.prod.yml` ya usa imagen desde `ghcr.io/orinocostudios/pinky` y red `dokploy-network`.
 
 ### Pendiente clave
-- Mejorar calidad del grounding (cobertura de extracción, entity hints desde la pregunta y evaluación por lotes).
-- Evitar el uso de `LLM_PROVIDER=local` en producción; asegurar providers reales con timeouts/retries y guardrails de salida.
-- Afinar DX de integración (documentación breve, CORS configurable y notas de despliegue por instancia).
-- Multi-corpus/multi-tenant en un solo deployment (hoy el patrón recomendado sigue siendo una instancia por dominio/proyecto).
-- Completar o retirar el adaptador Elasticsearch (actualmente actúa como stub).
 
-## Roadmap por fases
+- Idempotencia fuerte en backend remoto: hoy existe dedupe por checksum en capa aplicación, pero no garantía dura frente a carreras concurrentes.
+- Auditoría/migración de duplicados históricos antes de aplicar constraint nuevo en Neo4j.
+- Workflows GitHub Actions para CI/CD.
+- Trigger automático de Dokploy al publicar imagen nueva.
+- Validación E2E de caída/reconexión entre MCP y backend remoto.
 
-## Fase 1 - Calidad de conocimiento (retrieval y graph extraction)
+## Decisiones activas
 
-### Objetivo
+- Registry de contenedores: `GHCR` (`ghcr.io`).
+- Rama de despliegue: `main`.
+- Modelo de despliegue: build/test/push en GitHub Actions y auto deploy en Dokploy.
+- Estrategia MCP: `offline-first`, con SQLite como source of truth local y remoto como réplica eventual.
+- Estrategia backend: idempotencia por `ingestKey = sha256(tenantId|libraryId|checksum)`.
 
-Subir precisión de recuperación y grounding con componentes productivos.
+## Roadmap por PR
 
-### Tareas
-- Mejorar el extractor LLM estructurado (schema, validación y cobertura de entidades/relaciones).
-- Evaluar y ajustar retrieval/híbrido (parámetros `topK`, `CHUNK_SIZE`/`CHUNK_OVERLAP`, scoring y filtros cuando aplique).
-- Usar el versionado existente en metadata (`embedding_model`, `extraction_model`) para comparar resultados entre ingestas.
-
-### Criterio de salida
-- `POST /query` logra grounding consistente con citación `[CTX-X]`/`[FACT-X]`.
-- El grafo aporta entidades/relaciones trazables por `sourceChunkId` y la calidad se mantiene tras reindexaciones.
-
-## Fase 2 - Respuesta LLM grounded
+## PR-1 - MCP Hardening y validación real
 
 ### Objetivo
 
-Generar respuesta final con adapter LLM real y control de alucinaciones.
+Cerrar operativamente la implementación `offline-first` ya integrada en `pinky-mcp`.
 
 ### Tareas
-- Asegurar que `AnswerGeneratorPort` use el provider real configurado (OpenAI/Anthropic o local solo para dev).
-- Mantener la plantilla estricta y calibrar guardrails (evitar conocimiento externo y forzar citación).
-- Afinar timeouts/retries/fallbacks por proveedor para reducir latencia y errores.
-- (Opcional) Streaming de respuesta (SSE) para UIs chat.
+
+- Probar escenarios reales:
+  - backend remoto caído,
+  - reconexión,
+  - backlog grande,
+  - reinicio con cola pendiente,
+  - respuestas `429/5xx`.
+- Ajustar defaults de sync:
+  - `PINKY_SYNC_BATCH_SIZE`
+  - `PINKY_SYNC_CONCURRENCY`
+  - `PINKY_SYNC_INTERVAL_MS`
+  - `PINKY_SYNC_RETRY_BASE_MS`
+  - `PINKY_SYNC_RETRY_MAX_MS`
+  - `PINKY_SYNC_CLAIM_TTL_MS`
+- Validar merge local+remoto sin duplicados visibles.
+- Documentar smoke test y parámetros recomendados de producción en `pinky-mcp/README.md`.
 
 ### Criterio de salida
-- `POST /query` responde con salida grounded usando el provider real configurado.
-- Respuesta incluye evidencia trazable de contexto y grafo con citación por bloque.
 
-## Fase 3 - Hardening operacional
+- Sin red, MCP sigue guardando local.
+- Con red restaurada, la cola drena en lotes chicos sin bloquear herramientas.
+- Las lecturas combinadas no muestran duplicados ni pierden contexto reciente.
+
+## PR-2 - Backend idempotente
 
 ### Objetivo
 
-Preparar servicio para ejecución sostenida por dominio.
+Garantizar que retries o requests concurrentes del mismo documento y mismo scope no creen duplicados.
 
 ### Tareas
-- Consolidar seguridad operacional:
-  - `ApiKeyGuard` en mutaciones sensibles,
-  - `@nestjs/throttler` por tier/endpoint,
-  - límites de upload y validación de MIME.
-- Observabilidad mínima:
-  - logs estructurados,
-  - métricas Prometheus (ingesta, errores, latencia, outbox),
-  - indicadores de salud consistentes.
-- Idempotencia por checksum (ya implementada) y documentación del contrato de error/reintentos.
-- (Opcional) CORS configurable según despliegue.
+
+- Extender `Document` con `ingestKey`.
+- Calcular `ingestKey = sha256(tenantId|libraryId|checksum)` en ingesta.
+- Agregar `findDocumentByIngestKey` al repository.
+- Mantener pre-check por `ingestKey` antes de crear documento.
+- Intentar creación y, ante violación de constraint, recuperar documento existente y retornarlo.
+- Mantener checksum como señal de contenido, no como única garantía de idempotencia.
 
 ### Criterio de salida
-- Servicio listo para producción con seguridad básica, límites y observabilidad accionable.
 
-## Fase 4 - Administración de corpus e índice
+- Mismo `rawText` y mismo scope retornan mismo `documentId`.
+- Mismo `rawText` y distinto `libraryId` pueden coexistir.
+- Retry después de timeout o colisión concurrente no dispara pipeline pesado dos veces.
+
+## PR-3 - Auditoría y migración de datos
 
 ### Objetivo
 
-Completar contrato API de administración documental e indexación.
+Preparar datos existentes antes de habilitar constraint único por `ingestKey`.
 
 ### Tareas
 
-- `POST /documents/generate` para documentos por caso de uso.
-- `DELETE /documents/:id` con limpieza en Mongo y Neo4j.
-- `POST /index/rebuild` y `POST /index/incremental`.
-- Opcional: soporte de ingesta por URL con extracción controlada.
+- Auditar duplicados actuales por `(tenantId, libraryId, checksum)`.
+- Definir política de resolución:
+  - conservar primero creado,
+  - conservar más reciente,
+  - fusionar metadata cuando aplique.
+- Hacer backfill de `ingestKey` para documentos existentes.
+- Aplicar constraint único solo después de dejar corpus consistente.
 
 ### Criterio de salida
 
-- Administración del corpus es completa por API sin intervención manual de base de datos.
+- Todos los documentos existentes tienen `ingestKey` válido.
+- Constraint único se crea sin errores.
 
-## Fase 5 - Despliegue por instancia/dominio
+## PR-4 - Tests de confiabilidad
 
 ### Objetivo
 
-Estandarizar despliegue aislado por proyecto (hípica, medicina, etc.).
+Blindar comportamiento crítico antes de automatizar despliegue.
 
 ### Tareas
 
-- Definir plantilla de `.env` por instancia.
-- Mantener `docker-compose` por servicio con puertos/volúmenes aislados.
-- Documentar onboarding de nueva instancia (bootstrap de datos + validaciones).
+- Backend:
+  - test de dedupe por `ingestKey`,
+  - test de distinto scope,
+  - test de colisión concurrente simulada,
+  - test de skip del pipeline pesado cuando documento ya existe.
+- MCP:
+  - test de cola persistente,
+  - test de flush parcial,
+  - test de retry/backoff,
+  - test de merge local+remoto.
 
 ### Criterio de salida
 
-- Se pueden levantar dos instancias independientes sin mezcla de datasets ni configuración.
+- Suite verde para casos críticos de idempotencia y sync.
+
+## PR-5 - CI con GitHub Actions
+
+### Objetivo
+
+Ejecutar calidad mínima automáticamente en PRs y ramas principales.
+
+### Tareas
+
+- Crear `.github/workflows/ci.yml`.
+- Ejecutar:
+  - `npm ci`
+  - `npm run build`
+  - `npm test`
+  - opcional `npm run lint`
+  - `docker build -f Dockerfile.prod`
+- Bloquear merges si la validación falla.
+
+### Criterio de salida
+
+- Todo PR tiene señal automática de build/test.
+
+## PR-6 - CD con GHCR + Dokploy
+
+### Objetivo
+
+Construir, publicar y desplegar automáticamente producción desde `main`.
+
+### Tareas
+
+- Crear `.github/workflows/deploy.yml`.
+- Login en `ghcr.io` usando `GITHUB_TOKEN` o token con permisos `packages`.
+- Publicar imagen con tags:
+  - `main`
+  - `sha-<commit>`
+  - opcional `latest`
+- Disparar Dokploy por webhook/API tras publicación exitosa.
+- Configurar secretos mínimos:
+  - `DOKPLOY_WEBHOOK_URL` o credenciales API,
+  - permisos de `packages` en GitHub Actions.
+
+### Criterio de salida
+
+- Push a `main` produce imagen nueva y Dokploy redepliega sin paso manual.
+
+## PR-7 - Validación E2E y operación
+
+### Objetivo
+
+Validar flujo completo antes de declarar lista la feature de nube.
+
+### Tareas
+
+- Apagar backend remoto.
+- Guardar memoria desde MCP.
+- Verificar cola local SQLite.
+- Levantar backend remoto.
+- Verificar drenaje progresivo de pendientes.
+- Ingerir dos veces mismo documento en mismo scope.
+- Validar mismo `documentId`.
+- Hacer merge a `main`.
+- Verificar push a GHCR, redeploy Dokploy y `GET /health`.
+
+### Criterio de salida
+
+- Flujo completo funciona sin intervención manual fuera de observación y smoke checks.
 
 ## Dependencias técnicas
 
-- MongoDB (incluyendo estrategia de índice híbrido/vector en entorno final).
-- Neo4j 5+.
-- Proveedor LLM y proveedor de embeddings.
-- Storage de objetos para archivos crudos (filesystem o S3/compatible).
+- Node.js 20+
+- Neo4j 5+
+- GitHub Actions habilitado con permisos de `packages`
+- GHCR accesible desde Dokploy
+- Dokploy con acceso a webhook/API y red `dokploy-network`
+- Secrets reales de producción para `API_KEY`, `NEO4J_*`, `OPENAI_*` / `ANTHROPIC_*` / `OLLAMA_*`
 
-## Riesgos abiertos y mitigaciones
+## Riesgos y mitigaciones
 
-- Calidad de extracción semántica insuficiente:
-  - mitigación: evaluación por lote y ajuste de prompts/schema.
-- Latencia alta en query por llamada LLM:
-  - mitigación: límites de contexto, caché de respuestas, timeout + fallback.
-- Divergencia entre Mongo y Neo4j:
-  - mitigación: monitoreo de outbox, retries y endpoint manual de reproceso.
+- Duplicados históricos impiden crear constraint nuevo.
+  - Mitigación: auditoría y backfill antes de aplicar constraint.
+- Timeout después de ingesta exitosa puede causar retry desde MCP.
+  - Mitigación: idempotencia fuerte por `ingestKey` en backend remoto.
+- Dokploy puede no redeplegar automáticamente por polling/tag cache.
+  - Mitigación: usar webhook/API explícita tras push de imagen.
+- Uso de `latest` complica trazabilidad y rollback.
+  - Mitigación: desplegar también con tag `sha-<commit>`.
+
+## Rollout checklist
+
+- Constraint de `ingestKey` validado en staging.
+- GHCR configurado y accesible desde Dokploy.
+- Dokploy con variables y secretos de producción cargados.
+- Workflows GitHub verdes.
+- Smoke tests MCP y backend ejecutados.
+- Healthcheck `GET /health` estable después de deploy.
+
+## Rollback checklist
+
+- Reapuntar `BRAIN_IMAGE` a tag `sha-<commit-anterior>` si una versión falla.
+- Reejecutar deploy en Dokploy.
+- Mantener cola local MCP intacta durante rollback.
+- Si falla constraint nuevo en producción, detener rollout y volver a versión previa antes de forzar migración de datos.
 
 ## Cadencia de actualización
 
-- Cada cambio implementado debe registrar entrada en `CHANGELOG.md`.
-- Toda decisión de arquitectura nueva o cambio de dirección debe crear/actualizar ADR.
-- Este plan debe actualizarse al cerrar cada fase.
+- Cada PR de este roadmap debe anotar avance en `CHANGELOG.md`.
+- Toda decisión arquitectónica nueva debe registrarse en ADR.
+- Este plan se actualiza al cerrar cada PR/fase crítica.

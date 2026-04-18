@@ -15,7 +15,10 @@ Esta carpeta es la fuente oficial de verdad para arquitectura, plan de ejecucion
 ## Plan operativo
 
 - [Execution Plan](EXECUTION_PLAN.md)
+- [Frontend Execution Plan](FRONTEND_EXECUTION_PLAN.md)
+- [Frontend Testing Strategy](FRONTEND_TESTING_STRATEGY.md)
 - [Guía de integración rápida](INTEGRATION_GUIDE.md)
+- [Proceso de subida a producción](PRODUCTION_RELEASE.md)
 
 ## ADRs actuales
 
@@ -28,6 +31,7 @@ Esta carpeta es la fuente oficial de verdad para arquitectura, plan de ejecucion
 - [ADR-0007 - Hardening operacional (seguridad, confiabilidad e idempotencia)](ADR/ADR-0007-operational-hardening-security-reliability.md)
 - [ADR-0008 - Aislamiento multi-tenant por corpus](ADR/ADR-0008-multi-tenant-corpus-isolation.md)
 - [ADR-0010 - Persistencia Neo4j-Only](ADR/ADR-0010-neo4j-only-persistence.md)
+- [ADR-0011 - Idempotencia fuerte de ingesta y delivery cloud automatizado](ADR/ADR-0011-idempotent-ingestion-and-cloud-delivery.md)
 
 ## Convención de actualización
 

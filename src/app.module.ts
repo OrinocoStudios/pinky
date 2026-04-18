@@ -75,6 +75,7 @@ import { AdminController } from './modules/admin/presentation/admin.controller';
         const globalLimit = configService.get<number>('app.rateLimitGlobal', { infer: true }) ?? 10;
         const queryLimit = configService.get<number>('app.rateLimitQuery', { infer: true }) ?? 5;
         const uploadLimit = configService.get<number>('app.rateLimitUpload', { infer: true }) ?? 3;
+        const ingestLimit = configService.get<number>('app.rateLimitIngest', { infer: true }) ?? 5;
 
         return [
           {
@@ -91,6 +92,11 @@ import { AdminController } from './modules/admin/presentation/admin.controller';
             name: 'upload',
             ttl,
             limit: uploadLimit,
+          },
+          {
+            name: 'ingest',
+            ttl,
+            limit: ingestLimit,
           },
         ];
       },

@@ -1,9 +1,14 @@
-var _a;
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
-var proxyTarget = (_a = process.env.VITE_API_PROXY_TARGET) !== null && _a !== void 0 ? _a : 'http://localhost:8081';
+const proxyTarget = process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8081';
 export default defineConfig({
     plugins: [react()],
+    test: {
+        environment: 'jsdom',
+        setupFiles: './src/test/setup.ts',
+        globals: false,
+        css: true,
+    },
     server: {
         port: 5173,
         proxy: {

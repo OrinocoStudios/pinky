@@ -73,7 +73,7 @@ describe('GraphRagQueryUseCase', () => {
         PromptTemplateService,
         {
           provide: StructuredLogger,
-          useValue: { debug: jest.fn(), log: jest.fn(), error: jest.fn() },
+          useValue: { debug: jest.fn(), log: jest.fn(), error: jest.fn(), event: jest.fn() },
         },
         { provide: CHUNK_SEARCH_PORT, useValue: chunkSearch },
         { provide: DOCUMENT_REPOSITORY, useValue: documentRepository },

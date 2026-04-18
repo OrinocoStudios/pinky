@@ -1,7 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { queryClient } from '../app/query-client';
-import { getCurrentUser, logout } from '../lib/auth';
+import { ScopeProvider, useScope } from '../app/scope-context';
+import { useCurrentUser, useLogout } from '../hooks/use-auth';
+import { ScopeSelector } from './scope-selector';
 
 const navigation = [
   { to: '/', label: 'Dashboard' },
@@ -11,15 +11,21 @@ const navigation = [
 ];
 
 export function AppShell() {
+  return (
+    <ScopeProvider>
+      <AppShellContent />
+    </ScopeProvider>
+  );
+}
+
+function AppShellContent() {
   const navigate = useNavigate();
-  const { data: user } = useQuery({
-    queryKey: ['auth', 'me'],
-    queryFn: getCurrentUser,
-  });
+  const { data: user } = useCurrentUser();
+  const logoutMutation = useLogout();
+  const { scope } = useScope();
 
   async function handleLogout() {
-    await logout();
-    await queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+    await logoutMutation.mutateAsync();
     navigate('/login');
   }
 
@@ -29,6 +35,7 @@ export function AppShell() {
         <div>
           <p className="eyebrow">Pinky</p>
           <h1 className="sidebar-title">Admin Console</h1>
+          <p className="muted-text">{scope.tenantId || scope.libraryId ? `tenant:${scope.tenantId || '-'} / library:${scope.libraryId || '-'}` : 'Global scope'}</p>
         </div>
 
         <nav className="nav-list">
@@ -43,6 +50,8 @@ export function AppShell() {
             </NavLink>
           ))}
         </nav>
+
+        <ScopeSelector />
 
         <div className="user-card">
           <div>

@@ -24,6 +24,15 @@ export class StructuredLogger implements LoggerService {
     this.output('verbose', message, context, meta);
   }
 
+  /**
+   * Emits a structured domain event, e.g. DocumentIngested, DocumentDeleted.
+   * Events always share a stable shape `{ event, ...meta }` so they are easy to
+   * query in log aggregators.
+   */
+  event(eventName: string, meta?: LogMeta, context?: string): void {
+    this.output('info', eventName, context ?? 'DomainEvent', { event: eventName, ...meta });
+  }
+
   private output(
     level: string,
     message: string,

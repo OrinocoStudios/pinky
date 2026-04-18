@@ -75,6 +75,44 @@ textarea {
   margin-top: 32px;
 }
 
+.scope-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  margin-top: 24px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.scope-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.scope-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.scope-field {
+  display: grid;
+  gap: 6px;
+  color: #a7b8cf;
+  font-size: 0.88rem;
+}
+
+.scope-input {
+  max-width: none;
+}
+
+.scope-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
 .nav-link {
   padding: 12px 14px;
   border-radius: 14px;
@@ -121,6 +159,10 @@ textarea {
   gap: 24px;
 }
 
+.compact-gap {
+  gap: 16px;
+}
+
 .page-header {
   display: flex;
   justify-content: space-between;
@@ -143,6 +185,14 @@ textarea {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.form-grid {
+  align-items: start;
+}
+
+.form-grid-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .status-grid {
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
 }
@@ -151,6 +201,15 @@ textarea {
 .status-card,
 .panel {
   padding: 20px;
+}
+
+.state-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.state-error {
+  border-color: rgba(248, 113, 113, 0.22);
 }
 
 .stat-label {
@@ -198,6 +257,17 @@ th {
   border-radius: 999px;
   font-size: 0.82rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.scope-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #a7b8cf;
+  font-size: 0.76rem;
 }
 
 .status-ready {
@@ -299,6 +369,19 @@ th {
   max-width: 360px;
 }
 
+.form-input {
+  max-width: none;
+}
+
+.file-input {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: #f7fbff;
+  padding: 14px 16px;
+}
+
 .cell-stack {
   display: grid;
   gap: 4px;
@@ -311,6 +394,38 @@ th {
 .source-list {
   margin: 0;
   padding-left: 20px;
+}
+
+.table-action-button {
+  width: 100%;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(4, 8, 15, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.dialog-card {
+  width: min(520px, 100%);
+  padding: 24px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(8, 15, 26, 0.94);
+}
+
+.dialog-title {
+  margin: 0 0 10px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 @media (max-width: 1024px) {

@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { DeleteDocumentUseCase } from './delete-document.usecase';
 import { DOCUMENT_REPOSITORY, GRAPH_STORE_PORT } from '../../../shared/di.tokens';
+import { StructuredLogger } from '../../../common/logger/structured-logger.service';
 
 describe('DeleteDocumentUseCase', () => {
   let useCase: DeleteDocumentUseCase;
@@ -27,6 +28,7 @@ describe('DeleteDocumentUseCase', () => {
         DeleteDocumentUseCase,
         { provide: DOCUMENT_REPOSITORY, useValue: repo },
         { provide: GRAPH_STORE_PORT, useValue: graphStore },
+        { provide: StructuredLogger, useValue: { event: jest.fn(), log: jest.fn(), error: jest.fn() } },
       ],
     }).compile();
 

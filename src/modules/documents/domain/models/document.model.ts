@@ -27,6 +27,7 @@ export type DocumentSource =
 
 export interface DocumentRecord {
   documentId: string;
+  ingestKey?: string;
   tenantId?: string;
   libraryId?: string;
   title?: string;

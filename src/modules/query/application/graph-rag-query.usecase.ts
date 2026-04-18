@@ -172,6 +172,20 @@ export class GraphRagQueryUseCase {
         tokensUsed: result.tokensUsed,
         sourcesCited: result.sourcesUsed.length,
       });
+      this.logger.event('QueryExecuted', {
+        tenantId: input.tenantId,
+        libraryIds,
+        sessionId: input.sessionId,
+        queryLength: input.query.length,
+        topK: input.topK,
+        chunksRetrieved: chunks.length,
+        entitiesRetrieved: entities.length,
+        relationsRetrieved: relations.length,
+        sourcesCited: result.sourcesUsed.length,
+        model: result.model,
+        tokensUsed: result.tokensUsed,
+        latencyMs: latency,
+      });
 
       return {
         prompt,

@@ -1,20 +1,39 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { NextFunction, Request, Response } from 'express';
 import * as cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import * as bodyParser from 'body-parser';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
-import { BrainConfig } from './config/configuration';
+import { BrainConfig, validateProductionConfig } from './config/configuration';
 import { StructuredLogger } from './common/logger/structured-logger.service';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService<BrainConfig>);
   const jwtService = app.get(JwtService);
   app.useLogger(app.get(StructuredLogger));
+
+  const fullConfig: BrainConfig = {
+    app: configService.get('app', { infer: true })!,
+    auth: configService.get('auth', { infer: true })!,
+    neo4j: configService.get('neo4j', { infer: true })!,
+    llm: configService.get('llm', { infer: true })!,
+    ollama: configService.get('ollama', { infer: true })!,
+  };
+  validateProductionConfig(fullConfig);
+
+  app.set('trust proxy', 1);
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
   app.use(cookieParser());
 
   app.use('/metrics', async (request: Request, response: Response, next: NextFunction) => {

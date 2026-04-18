@@ -1,86 +1,66 @@
-name: CI/CD
+name: CI
 
 on:
-  push:
-    branches: ["main"]
   pull_request:
-    branches: ["main"]
-
-concurrency:
-  group: ci-cd-${{ github.ref }}
-  cancel-in-progress: true
+  push:
+    branches:
+      - main
+      - develop
 
 jobs:
-  test:
+  backend:
+    name: Backend (build + tests)
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build app
+      - name: Build
         run: npm run build
 
-      - name: Run tests
-        run: npm run test:ci
+      - name: Unit tests
+        run: npm test -- --runInBand
 
-      - name: Install web dependencies
-        run: npm ci
-        working-directory: web
+      - name: Integration tests
+        run: npm run test:e2e -- --runInBand
 
-      - name: Build web app
-        run: npm run build
-        working-directory: web
+      - name: Build production image
+        run: docker build -f Dockerfile.prod -t pinky-ci:latest .
 
-  build-and-deploy:
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  web:
+    name: Web (typecheck + tests + build)
     runs-on: ubuntu-latest
-    environment: DOKPLOY
-    permissions:
-      contents: read
-      packages: write
+
+    defaults:
+      run:
+        working-directory: web
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set image name
-        run: |
-          echo "REGISTRY=ghcr.io" >> $GITHUB_ENV
-          echo "IMAGE_NAME=orinocostudios/pinky" >> $GITHUB_ENV
-
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Trigger Dokploy deployment
-        env:
-          DOKPLOY_URL: ${{ secrets.DOKPLOY_DEPLOY_URL }}
-        run: |
-          if [ -n "$DOKPLOY_URL" ]; then
-            curl -sf -X POST "$DOKPLOY_URL"
-          else
-            echo "DOKPLOY_DEPLOY_URL not set, skipping deployment trigger"
-          fi
+      - name: Unit & integration tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
