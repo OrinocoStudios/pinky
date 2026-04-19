@@ -92,10 +92,9 @@ docker manifest inspect ghcr.io/orinocostudios/pinky:latest
 
 ## 6. Tags disponibles
 
-El pipeline de deploy genera tres tags por cada push exitoso a `main`:
+El workflow [`release.yml`](../.github/workflows/release.yml) genera típicamente estos tags por cada publicación desde `main`:
 
-- **`main`** — Tag estable para producción continua.
-- **`latest`** — Alias opcional del último build exitoso de `main`.
+- **`latest`** — Último build publicado desde `main` (API `pinky` / web `pinky-web`).
 - **`sha-<commit>`** — SHA corto del commit (ej: `sha-a1b2c3d`). Útil para rollbacks o pinear una versión.
 
 Para usar un tag específico en Dokploy, configurar la variable de entorno:
@@ -119,12 +118,20 @@ BRAIN_IMAGE=ghcr.io/orinocostudios/pinky:sha-a1b2c3d
 
 ### La imagen no aparece en Packages
 
-- Verificar que el workflow CI pasó correctamente (es prerrequisito del workflow `Deploy`).
-- Revisar los logs del workflow `Deploy` en la pestaña **Actions** del repositorio.
-- El workflow de deploy solo se ejecuta en pushes a `main`, no en PRs.
+- Revisar los logs del workflow **Release** en **Actions**.
+- Las imágenes solo se publican cuando los cambios tocan `src/**`, `Dockerfile.prod`, `web/**`, etc. (filtros en `release.yml`), salvo ejecución manual (**Run workflow**).
 
 ## 8. Secrets esperados por GitHub Actions
 
-- `DOKPLOY_WEBHOOK_URL`: webhook o endpoint HTTP que dispara el redeploy en Dokploy.
+| Secret | Uso |
+|--------|-----|
+| `VITE_API_BASE_URL` | URL HTTPS pública del API para el **build** del front en CI (ej. `https://brain.tudominio.com`). |
+| `DOKPLOY_WEBHOOK_BACKEND` | Webhook Dokploy del proyecto que despliega **API + Neo4j** (`docker-compose.prod.yml`). Sustituye al antiguo `DOKPLOY_WEBHOOK_URL`. |
+| `DOKPLOY_WEBHOOK_WEB` | Webhook del despliegue **frontend** (`docker-compose.web.yml`). Sustituye a `DOKPLOY_WEB_WEBHOOK_URL`. |
+| `DOKPLOY_WEBHOOK_STACK` | Opcional: webhook para redeploy cuando solo cambia `docker-compose.prod.yml` (recarga compose sin nueva imagen API). |
+| `DOKPLOY_WEBHOOK_URL` | Compatibilidad: si `DOKPLOY_WEBHOOK_BACKEND` está vacío, se usa como webhook del backend. |
+| `DOKPLOY_WEB_WEBHOOK_URL` | Compatibilidad: si `DOKPLOY_WEBHOOK_WEB` está vacío, se usa para el front. |
 
-`GITHUB_TOKEN` se usa automáticamente para publicar en GHCR, siempre que el repositorio tenga permisos `Read and write` para workflows.
+`GITHUB_TOKEN` publica en GHCR con permisos `packages: write` del workflow **Release**.
+
+Ver también [DOKPLOY.md](DOKPLOY.md#github-actions-release).

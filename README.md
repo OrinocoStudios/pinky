@@ -39,6 +39,10 @@ yarn reindex
 
 Opcional: `REINDEX_LIMIT=100 yarn reindex` para limitar chunks procesados.
 
+## Despliegue (Dokploy)
+
+Guía operativa: [docs/DOKPLOY.md](docs/DOKPLOY.md) (Neo4j + API + web, red `dokploy-network`, `VITE_API_BASE_URL` y smoke tests).
+
 ## Endpoints
 
 - `GET /health`

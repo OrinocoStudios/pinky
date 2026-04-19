@@ -181,7 +181,7 @@ Construir, publicar y desplegar automáticamente producción desde `main`.
 
 ### Tareas
 
-- Crear `.github/workflows/deploy.yml`.
+- Usar `.github/workflows/release.yml` (build GHCR + webhooks Dokploy).
 - Login en `ghcr.io` usando `GITHUB_TOKEN` o token con permisos `packages`.
 - Publicar imagen con tags:
   - `main`
