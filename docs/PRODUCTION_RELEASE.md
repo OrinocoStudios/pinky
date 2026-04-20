@@ -32,7 +32,7 @@ Como minimo, revisar estas variables en Dokploy:
 - `NEO4J_USER`
 - `NEO4J_PASSWORD`
 - `LLM_PROVIDER`
-- `OLLAMA_BASE_URL` o `OPENAI_*` o `ANTHROPIC_*`
+- `AI_URL` o `OPENAI_*` o `ANTHROPIC_*`
 - variables de auth si el entorno usa login web
 
 No usar valores por defecto inseguros como `change-me-in-production`.

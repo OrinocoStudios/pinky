@@ -151,7 +151,7 @@ Este registro resume cambios de implementación para mantener contexto operativo
 
 - Puertos `EmbeddingPort` y `GraphExtractorPort` para desacoplar IA de proveedores concretos.
 - Adaptadores Ollama: `OllamaEmbeddingAdapter` (embeddings vía `/api/embed`) y `OllamaGraphExtractorAdapter` (extracción JSON vía `/api/generate`).
-- Configuración Ollama: `OLLAMA_BASE_URL`, `OLLAMA_EMBEDDING_MODEL`, `OLLAMA_EXTRACTION_MODEL`, `OLLAMA_TIMEOUT_MS`.
+- Configuración Ollama: `AI_URL`, `OLLAMA_EMBEDDING_MODEL`, `OLLAMA_EXTRACTION_MODEL`, `OLLAMA_TIMEOUT_MS`.
 - Versionado de modelos en metadata: `embedding_model`, `extraction_model` en documentos; `embeddingModel` en chunks.
 - Extracción de grafo por chunk con `sourceChunkId` real para trazabilidad.
 - Caso de uso `ReindexChunksUseCase` y script `npm run reindex` para reindexar embeddings de chunks existentes.

@@ -6,7 +6,7 @@ Aplica al despliegue en Dokploy con:
 
 - Backend en `brain.tudominio.com` (servicio Compose `brain-service` desde `docker-compose.prod.yml`).
 - Frontend en `app.tudominio.com` (servicio Compose `web` desde `docker-compose.web.yml`).
-- Ollama / endpoint OpenAI-compatible propio referenciado por `OPENAI_BASE_URL` / `OLLAMA_BASE_URL`.
+- Ollama / endpoint OpenAI-compatible propio referenciado por `OPENAI_BASE_URL` / `AI_URL`.
 
 ## Variables críticas (obligatorias en producción)
 

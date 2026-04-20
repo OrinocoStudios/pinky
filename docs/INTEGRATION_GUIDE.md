@@ -28,7 +28,7 @@ Partir de [`.env.example`](.env.example). En producción, como mínimo:
 - Conectividad a:
   - `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`
 - Modelos de Ollama (si usas Ollama para embeddings/extracción):
-  - `OLLAMA_BASE_URL`
+  - `AI_URL`
   - `OLLAMA_EMBEDDING_MODEL`
   - `OLLAMA_EXTRACTION_MODEL`
 

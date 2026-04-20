@@ -188,7 +188,7 @@ export default (): BrainConfig => ({
     password: process.env.NEO4J_PASSWORD ?? 'neo4j_password',
   },
   ollama: {
-    baseUrl: process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434',
+    baseUrl: process.env.AI_URL ?? 'http://localhost:11434',
     embeddingModel: process.env.OLLAMA_EMBEDDING_MODEL ?? 'nomic-embed-text',
     extractionModel: process.env.OLLAMA_EXTRACTION_MODEL ?? 'llama3.2',
     aiModel: process.env.OLLAMA_AI_MODEL ?? 'llama3.2',

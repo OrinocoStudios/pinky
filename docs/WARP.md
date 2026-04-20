@@ -99,7 +99,7 @@ NEO4J_USER=neo4j
 NEO4J_PASSWORD=<secret>
 
 # Ollama (embeddings + graph extraction)
-OLLAMA_BASE_URL=http://localhost:11434
+AI_URL=http://localhost:11434
 OLLAMA_EMBEDDING_MODEL=nomic-embed-text
 OLLAMA_EXTRACTION_MODEL=llama3.2
 

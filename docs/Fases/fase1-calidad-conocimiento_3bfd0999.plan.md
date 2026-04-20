@@ -69,7 +69,7 @@ Elevar la calidad de recuperación y grounding reemplazando componentes placehol
     - `[memory_architecture/brain_service/src/modules/ingestion/application/reindex-chunks.usecase.ts](memory_architecture/brain_service/src/modules/ingestion/application/reindex-chunks.usecase.ts)`
     - `[memory_architecture/brain_service/package.json](memory_architecture/brain_service/package.json)`
 6. **Config y cableado DI para producción local**
-  - Añadir configuración de Ollama (`OLLAMA_BASE_URL`, `OLLAMA_EMBEDDING_MODEL`, `OLLAMA_EXTRACTION_MODEL`) y registrar providers.
+  - Añadir configuración de Ollama (`AI_URL`, `OLLAMA_EMBEDDING_MODEL`, `OLLAMA_EXTRACTION_MODEL`) y registrar providers.
   - Archivos objetivo:
     - `[memory_architecture/brain_service/src/config/configuration.ts](memory_architecture/brain_service/src/config/configuration.ts)`
     - `[memory_architecture/brain_service/.env.example](memory_architecture/brain_service/.env.example)`
