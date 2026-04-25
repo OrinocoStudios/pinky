@@ -8,13 +8,15 @@ Brain Service is a document ingestion and GraphRAG query API. It ingests documen
 
 ## Authentication
 
-When `ENABLE_API_KEY_AUTH=true`, all mutating endpoints require the `X-API-Key` header.
+When `ENABLE_API_KEY_AUTH=true`, corpus endpoints (including `GET /documents`, mutating `POST/DELETE` under documents, `POST /query`, index routes, etc.) go through `ApiKeyGuard` and need the `X-API-Key` header (unless a separate admin/web auth path applies per deployment).
 
 ```
 X-API-Key: <your-api-key>
 ```
 
-Endpoints that require authentication are marked with 🔐 below. Read-only endpoints (`GET /health`, `GET /documents`, `GET /metrics`) do NOT require authentication.
+When `ENABLE_API_KEY_AUTH=false`, `ApiKeyGuard` allows the request (still subject to other guards, e.g. rate limits). **`GET /health` is public.** Endpoints that expect an API key when auth is on are marked with 🔐 below.
+
+`GET /metrics` may be restricted when admin/API-key protection is enabled in `src/main.ts` (see that file for the current rule).
 
 ## Multi-tenant Header
 
@@ -238,7 +240,7 @@ X-API-Key: <key>
 
 Lists all ingested documents, ordered by creation date (newest first).
 
-**Authentication**: None
+**Authentication**: Same as other corpus routes — `ApiKeyGuard` when `ENABLE_API_KEY_AUTH=true` (header `X-API-Key`). When API key auth is off, the route is open aside from rate limits and optional tenant rules.
 
 **Request**:
 ```

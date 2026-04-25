@@ -52,7 +52,7 @@ Consecuencia práctica:
 
 ## 6) Límites de carga y abusos
 
-En `src/main.ts` se configura `bodyParser` con límite por defecto de `1mb`.
+En `src/main.ts` se configura `bodyParser` con límite de **50mb** para JSON y URL-encoded (coherente con subidas vía `multipart`).
 
 Upload (`POST /documents/upload`):
 - tamaño máximo de archivo: `MAX_FILE_SIZE_MB` (por defecto `10MB`)
@@ -105,7 +105,7 @@ La base multi-tenant ya está implementada de forma inicial mediante `X-Tenant-I
 
 - Header requerido cuando multi-tenant está activo:
   - `X-Tenant-Id: <tenant-id>`
-- Endpoints con requisito de tenant:
+- Endpoints con requisito de tenant (cuando `ENABLE_MULTI_TENANT=true`):
   - `POST /documents/text`
   - `POST /documents/upload`
   - `POST /documents/generate`
@@ -113,13 +113,14 @@ La base multi-tenant ya está implementada de forma inicial mediante `X-Tenant-I
   - `POST /query`
   - `POST /index/rebuild`
   - `POST /index/incremental`
-  - `POST /outbox/retry`
   - `GET /documents`
+
+(El flujo con **outbox** Mongo ya no aplica: persistencia operativa en Neo4j; ver ADR-0010. No hay `POST /outbox/retry` en el runtime actual.)
 
 ### Consideraciones de seguridad
 
 - El borrado por `documentId` valida tenant para evitar IDOR entre corpus.
-- Reindex y retry de outbox se ejecutan en alcance del tenant solicitado.
+- Reindex y operaciones de índice usan el tenant solicitado en cabecera/cuerpo.
 
 ### Próximos pasos recomendados
 
