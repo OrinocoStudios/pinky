@@ -313,7 +313,13 @@ export type ThrottlingOverrides = {
 // ── Test Module Factory ────────────────────────────────────────
 export async function createTestApp(overrides?: {
   app?: { enableMultiTenant?: boolean; enableApiKeyAuth?: boolean };
-  auth?: { allowedAdminEmails?: string[]; enableDevLogin?: boolean };
+  auth?: {
+    allowedAdminEmails?: string[];
+    enableDevLogin?: boolean;
+    oauthEnabled?: boolean;
+    googleOauthEnabled?: boolean;
+    githubOauthEnabled?: boolean;
+  };
   throttling?: ThrottlingOverrides;
 }): Promise<{
   app: INestApplication;
@@ -370,6 +376,9 @@ export async function createTestApp(overrides?: {
             },
             auth: {
               enableDevLogin: overrides?.auth?.enableDevLogin ?? false,
+              oauthEnabled: overrides?.auth?.oauthEnabled ?? true,
+              googleOauthEnabled: overrides?.auth?.googleOauthEnabled ?? true,
+              githubOauthEnabled: overrides?.auth?.githubOauthEnabled ?? true,
               jwtSecret: 'test-auth-secret',
               jwtExpiresIn: '8h',
               cookieName: 'pinky_auth',

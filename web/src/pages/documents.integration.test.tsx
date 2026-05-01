@@ -138,8 +138,10 @@ describe('DocumentsPage', () => {
     });
 
     it('triggers incremental reindexing', async () => {
+      const incrementalSpy = vi.fn();
       server.use(
         http.post('/index/incremental', () => {
+          incrementalSpy();
           return HttpResponse.json({ success: true });
         }),
       );
@@ -148,14 +150,16 @@ describe('DocumentsPage', () => {
       await screen.findByText('Doc 1');
 
       fireEvent.click(screen.getByRole('button', { name: 'Incremental Reindex' }));
-
-      // Check for success toast (assuming toast implementation)
-      await screen.findByText(/reindexing completed/i);
+      const dialog = await screen.findByRole('dialog', { name: /incremental reindex/i });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Start' }));
+      await waitFor(() => expect(incrementalSpy).toHaveBeenCalledTimes(1));
     });
 
     it('triggers rebuild reindexing after confirmation', async () => {
+      const rebuildSpy = vi.fn();
       server.use(
         http.post('/index/rebuild', () => {
+          rebuildSpy();
           return HttpResponse.json({ success: true });
         }),
       );
@@ -166,10 +170,9 @@ describe('DocumentsPage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Rebuild Index' }));
       
       // Check for confirmation dialog
-      const dialog = await screen.findByRole('dialog', { name: /confirm rebuild/i });
-      fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }));
-
-      await screen.findByText(/rebuild completed/i);
+      const dialog = await screen.findByRole('dialog', { name: /rebuild index/i });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Start' }));
+      await waitFor(() => expect(rebuildSpy).toHaveBeenCalledTimes(1));
     });
   });
 });

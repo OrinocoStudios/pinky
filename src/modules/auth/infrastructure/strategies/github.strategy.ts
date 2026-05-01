@@ -14,17 +14,21 @@ type GithubEmailRecord = {
 
 @Injectable()
 export class GithubStrategy extends PassportStrategy(Strategy, 'github') {
+  private readonly oauthEnabled: boolean;
   constructor(
     configService: ConfigService<BrainConfig>,
     private readonly authService: AuthService,
   ) {
     const authConfig = configService.get('auth', { infer: true })!;
+    const clientID = authConfig.githubClientId || 'github-oauth-disabled';
+    const clientSecret = authConfig.githubClientSecret || 'github-oauth-disabled';
     super({
-      clientID: authConfig.githubClientId,
-      clientSecret: authConfig.githubClientSecret,
+      clientID,
+      clientSecret,
       callbackURL: authConfig.githubCallbackUrl,
       scope: ['read:user', 'user:email'],
     });
+    this.oauthEnabled = authConfig.githubOauthEnabled;
   }
 
   async validate(
@@ -33,6 +37,10 @@ export class GithubStrategy extends PassportStrategy(Strategy, 'github') {
     profile: Profile,
     done: (error: unknown, user?: unknown) => void,
   ): Promise<void> {
+    if (!this.oauthEnabled) {
+      done(new UnauthorizedException('GitHub OAuth is disabled'), false);
+      return;
+    }
     try {
       const email = await this.resolveVerifiedEmail(accessToken, profile);
       const user = this.authService.createUser({

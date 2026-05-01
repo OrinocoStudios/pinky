@@ -42,6 +42,30 @@ describe('Auth and admin protection (e2e)', () => {
     await devApp.app.close();
   });
 
+  it('hides oauth providers and blocks oauth routes when disabled', async () => {
+    const oauthDisabledApp = await createTestApp({
+      app: { enableApiKeyAuth: true },
+      auth: {
+        allowedAdminEmails: ['admin@example.com'],
+        oauthEnabled: false,
+        googleOauthEnabled: false,
+        githubOauthEnabled: false,
+      },
+    });
+
+    await request(oauthDisabledApp.app.getHttpServer())
+      .get('/auth/providers')
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.providers).toEqual([]);
+      });
+
+    await request(oauthDisabledApp.app.getHttpServer()).get('/auth/google').expect(404);
+    await request(oauthDisabledApp.app.getHttpServer()).get('/auth/github').expect(404);
+
+    await oauthDisabledApp.app.close();
+  });
+
   it('returns auth/me for a valid bearer token', async () => {
     const token = await jwtService.signAsync({
       sub: 'google:user-1',

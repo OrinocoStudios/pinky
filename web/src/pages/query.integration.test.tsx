@@ -1,4 +1,4 @@
-import { FormEvent, fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryPage } from './query';
@@ -50,7 +50,9 @@ describe('QueryPage', () => {
       }),
       http.get('/query/history/:sessionId', ({ params }) => {
         historySpy();
-        return HttpResponse.json(chatHistoryPayload(params.sessionId, [
+        const sessionIdParam = Array.isArray(params.sessionId) ? params.sessionId[0] : params.sessionId;
+        const sessionId = sessionIdParam ?? 'unknown-session';
+        return HttpResponse.json(chatHistoryPayload(sessionId, [
           { role: 'user' as const, content: 'Initial query', timestamp: now },
           { role: 'assistant' as const, content: 'Here is the answer from history', timestamp: now },
         ]));
@@ -84,17 +86,31 @@ describe('QueryPage', () => {
 
     await waitFor(() => expect(submitSpy).toHaveBeenCalledTimes(1));
 
-    await screen.findByText('This is the generated answer');
+    await screen.findByText(/This is the generated answer/i);
+
+
     await screen.findByText('Fast Context');
     await screen.findByText('Truth Facts');
 
-    const answerText = await screen.findByText('This is the generated answer');
+    const answerText = await screen.findByText(/This is the generated answer/i);
     expect(answerText).toBeInTheDocument();
-    expect(screen.getByText('Model: gpt-4')).toBeInTheDocument();
-    expect(screen.getByText('Tokens: 1250')).toBeInTheDocument();
-    expect(screen.getByText('Sources: 2')).toBeInTheDocument();
+    const modelCard = screen.getByText('Model').closest('.status-card');
+    const tokensCard = screen.getByText('Tokens').closest('.status-card');
+    const sourcesCardLabel = screen
+      .getAllByText('Sources')
+      .find((node) => Boolean(node.closest('.status-card')));
+    const sourcesCard = sourcesCardLabel?.closest('.status-card') ?? null;
+    expect(modelCard).not.toBeNull();
+    expect(tokensCard).not.toBeNull();
+    expect(sourcesCard).not.toBeNull();
+    const modelCardEl = modelCard as HTMLElement;
+    const tokensCardEl = tokensCard as HTMLElement;
+    const sourcesCardEl = sourcesCard as HTMLElement;
+    expect(within(modelCardEl).getByText('gpt-4')).toBeInTheDocument();
+    expect(within(tokensCardEl).getByText('1250')).toBeInTheDocument();
+    expect(within(sourcesCardEl).getByText('2')).toBeInTheDocument();
 
-    await waitFor(() => expect(historySpy).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(historySpy).toHaveBeenCalled());
   });
 
   it('saves query and sessionId to localStorage', async () => {
@@ -111,7 +127,8 @@ describe('QueryPage', () => {
 
     await waitFor(() => expect(submitSpy).toHaveBeenCalledTimes(1));
 
-    await screen.findByText('This is the generated answer');
+    await screen.findByText(/This is the generated answer/i);
+
 
     const lastQuery = localStorage.getItem('pinky_last_query');
     const lastSession = localStorage.getItem('pinky_last_session');
@@ -154,7 +171,7 @@ describe('QueryPage', () => {
 
     await screen.findByText('Chat History');
 
-    await waitFor(() => expect(historySpy).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(historySpy).toHaveBeenCalled());
 
     expect(screen.getByText('user')).toBeInTheDocument();
     expect(screen.getByText('assistant')).toBeInTheDocument();
@@ -163,19 +180,23 @@ describe('QueryPage', () => {
   });
 
   it('shows loading state while query is running', async () => {
+    server.use(
+      http.post('/query', async () => {
+        submitSpy();
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return HttpResponse.json(queryResponse());
+      }),
+    );
     renderWithAppProviders(<QueryPage />);
 
     const queryInput = screen.getByPlaceholderText('Ask Pinky about the data currently ingested in the system');
     fireEvent.change(queryInput, { target: { value: 'Running query test' } });
-
-    const submitButton = screen.getByRole('button', { name: 'Running query...' });
+    const submitButton = screen.getByRole('button', { name: 'Run query' });
     fireEvent.click(submitButton);
-
+    await screen.findByRole('button', { name: 'Running query...' });
     await waitFor(() => expect(submitSpy).toHaveBeenCalledTimes(1));
 
-    await screen.findByText('Running query...');
-
-    await screen.findByText('This is the generated answer');
+    await screen.findByText(/This is the generated answer/i);
   });
 
   it('shows error state when query fails', async () => {

@@ -24,13 +24,21 @@ export function QueryPage() {
  
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!query.trim()) {
+    const normalizedQuery = query.trim();
+    const normalizedSessionId = sessionId.trim();
+    if (!normalizedQuery) {
       return;
+    }
+    if (normalizedQuery !== query) {
+      setQuery(normalizedQuery);
+    }
+    if (normalizedSessionId !== sessionId) {
+      setSessionId(normalizedSessionId);
     }
  
     const payload: QueryPayload = {
-      query: query.trim(),
-      sessionId: sessionId.trim() || undefined,
+      query: normalizedQuery,
+      sessionId: normalizedSessionId || undefined,
       topK: parseInt(topK, 10) || 8,
       entityHints: hintsText.split(',').map(h => h.trim()).filter(Boolean),
       libraryIds: libraryIdsText.split(',').map(l => l.trim()).filter(Boolean),
@@ -62,6 +70,8 @@ export function QueryPage() {
               <input
                 className="search-input"
                 style={{ width: '100%', padding: '4px 8px', fontSize: '0.8rem' }}
+                aria-label="Session ID"
+                placeholder="Session ID"
                 value={sessionId}
                 onChange={(event) => setSessionId(event.target.value)}
               />
@@ -72,6 +82,8 @@ export function QueryPage() {
                 className="search-input"
                 style={{ width: '100%', padding: '4px 8px', fontSize: '0.8rem' }}
                 type="number"
+                aria-label="Top K"
+                placeholder="Top K"
                 value={topK}
                 onChange={(event) => setTopK(event.target.value)}
               />
@@ -81,6 +93,8 @@ export function QueryPage() {
               <input
                 className="search-input"
                 style={{ width: '100%', padding: '4px 8px', fontSize: '0.8rem' }}
+                aria-label="Entity Hints"
+                placeholder="Entity Hints"
                 value={hintsText}
                 onChange={(event) => setHintsText(event.target.value)}
               />
@@ -90,6 +104,8 @@ export function QueryPage() {
               <input
                 className="search-input"
                 style={{ width: '100%', padding: '4px 8px', fontSize: '0.8rem' }}
+                aria-label="Library IDs"
+                placeholder="Library IDs"
                 value={libraryIdsText}
                 onChange={(event) => setLibraryIdsText(event.target.value)}
               />
@@ -112,7 +128,7 @@ export function QueryPage() {
               <p className="answer-block">{mutation.data.answer}</p>
             </div>
  
-            {mutation.data.fastContext && (
+            {Boolean(mutation.data.fastContext) && (
               <div>
                 <h3>Fast Context</h3>
                 <div className="panel muted-text" style={{ padding: '12px', fontSize: '0.9rem' }}>
@@ -121,7 +137,7 @@ export function QueryPage() {
               </div>
             )}
  
-            {mutation.data.truthFacts && (
+            {Boolean(mutation.data.truthFacts) && (
               <div>
                 <h3>Truth Facts</h3>
                 <div className="panel" style={{ padding: '12px' }}>

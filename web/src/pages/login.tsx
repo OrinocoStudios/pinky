@@ -9,6 +9,9 @@ export function LoginPage() {
   const query = useCurrentUser();
   const providersQuery = useAuthProviders();
   const devLoginMutation = useDevLogin();
+  const providers = providersQuery.data?.providers ?? [];
+  const googleEnabled = providers.includes('google');
+  const githubEnabled = providers.includes('github');
 
   if (query.data) {
     return <Navigate to="/" replace />;
@@ -31,17 +34,24 @@ export function LoginPage() {
         <p className="eyebrow">Pinky</p>
         <h1>Admin access only</h1>
         <p className="muted-text">
-          Sign in with a Google or GitHub account that is explicitly allowlisted as an administrator.
+          Sign in with an allowlisted admin account.
         </p>
-
-        <div className="login-actions">
-          <a className="primary-button" href={getProviderLoginUrl('google')}>
-            Continue with Google
-          </a>
-          <a className="secondary-button" href={getProviderLoginUrl('github')}>
-            Continue with GitHub
-          </a>
-        </div>
+        {googleEnabled || githubEnabled ? (
+          <div className="login-actions">
+            {googleEnabled ? (
+              <a className="primary-button" href={getProviderLoginUrl('google')}>
+                Continue with Google
+              </a>
+            ) : null}
+            {githubEnabled ? (
+              <a className={googleEnabled ? 'secondary-button' : 'primary-button'} href={getProviderLoginUrl('github')}>
+                Continue with GitHub
+              </a>
+            ) : null}
+          </div>
+        ) : providersQuery.isSuccess ? (
+          <p className="muted-text">OAuth disabled in this environment.</p>
+        ) : null}
 
         {providersQuery.data?.devLogin ? (
           <form className="dev-login" onSubmit={handleDevLogin}>

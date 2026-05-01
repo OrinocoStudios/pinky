@@ -19,11 +19,20 @@ export class AuthController {
 
   @Get('providers')
   providers() {
-    const enableDevLogin = this.configService.get('auth.enableDevLogin', { infer: true }) ?? false;
+    const authConfig = this.configService.get('auth', { infer: true })!;
+    const providers: string[] = [];
+
+    if (authConfig.googleOauthEnabled) {
+      providers.push('google');
+    }
+
+    if (authConfig.githubOauthEnabled) {
+      providers.push('github');
+    }
 
     return {
-      providers: ['google', 'github'],
-      devLogin: enableDevLogin,
+      providers,
+      devLogin: authConfig.enableDevLogin,
     };
   }
 
