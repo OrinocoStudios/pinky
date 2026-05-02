@@ -46,7 +46,7 @@ describe('ScopeSelector', () => {
       { initialEntries: ['/?tenantId=tenant-a&libraryId=library-a'] },
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reset scope' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar' }));
 
     expect(screen.getByTestId('scope-value')).toHaveTextContent('/');
     expect(screen.getByTestId('search-value')).toHaveTextContent('');

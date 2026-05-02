@@ -42,6 +42,12 @@ describe('DocumentsPage Deletion Flow', () => {
       http.get('/documents', () => {
         return HttpResponse.json(documents);
       }),
+      http.get('/documents/scopes', () =>
+        HttpResponse.json({
+          tenants: [],
+          libraries: [],
+        }),
+      ),
       http.delete('/documents/:id', ({ params }) => {
         const id = String(params.id);
         documents = documents.filter((document) => document.documentId !== id);
@@ -53,7 +59,7 @@ describe('DocumentsPage Deletion Flow', () => {
   it('shows confirmation dialog when delete button is clicked', async () => {
     renderWithAppProviders(<DocumentsPage />);
 
-    await waitFor(() => expect(screen.queryByText(/loading/i)).not.toBeInTheDocument(), { timeout: 5000 });
+    await waitFor(() => expect(screen.queryByText(/cargando/i)).not.toBeInTheDocument(), { timeout: 5000 });
 
     const deleteButton = screen.getAllByRole('button', { name: /^eliminar$/i })[0];
     fireEvent.click(deleteButton);
@@ -63,7 +69,7 @@ describe('DocumentsPage Deletion Flow', () => {
   it('cancels deletion when cancel is clicked', async () => {
     renderWithAppProviders(<DocumentsPage />);
 
-    await waitFor(() => expect(screen.queryByText(/loading/i)).not.toBeInTheDocument(), { timeout: 5000 });
+    await waitFor(() => expect(screen.queryByText(/cargando/i)).not.toBeInTheDocument(), { timeout: 5000 });
 
     const deleteButton = screen.getAllByRole('button', { name: /^eliminar$/i })[0];
     fireEvent.click(deleteButton);
@@ -79,7 +85,7 @@ describe('DocumentsPage Deletion Flow', () => {
   it('calls delete API and removes row when confirmed', async () => {
     renderWithAppProviders(<DocumentsPage />);
 
-    await waitFor(() => expect(screen.queryByText(/loading/i)).not.toBeInTheDocument(), { timeout: 5000 });
+    await waitFor(() => expect(screen.queryByText(/cargando/i)).not.toBeInTheDocument(), { timeout: 5000 });
 
     const deleteButton = screen.getAllByRole('button', { name: /^eliminar$/i })[0];
     fireEvent.click(deleteButton);

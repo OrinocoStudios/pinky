@@ -17,7 +17,7 @@ export function ScopeSelector() {
     <section className="scope-panel">
       <div>
         <p className="eyebrow">Scope</p>
-        <h2 className="scope-title">Tenant / Library</h2>
+        <h2 className="scope-title">Tenant y library</h2>
       </div>
 
       <div className="scope-fields">
@@ -43,9 +43,9 @@ export function ScopeSelector() {
       </div>
 
       <div className="scope-actions">
-        <span className="muted-text">{hasScope(scope) ? 'Scoped requests enabled' : 'Global scope'}</span>
+        <span className="muted-text">{hasScope(scope) ? 'Requests con alcance activo' : 'Modo global'}</span>
         <button className="secondary-button" type="button" onClick={resetScope} disabled={!hasScope(scope)}>
-          Reset scope
+          Limpiar
         </button>
       </div>
     </section>

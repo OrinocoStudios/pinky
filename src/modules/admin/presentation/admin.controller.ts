@@ -5,7 +5,11 @@ import { BrainConfig } from '../../../config/configuration';
 import { DocumentRepositoryPort } from '../../documents/domain/ports/document-repository.port';
 import { DocumentRecord } from '../../documents/domain/models/document.model';
 import { GraphStorePort } from '../../graph/domain/ports/graph-store.port';
-import { DOCUMENT_REPOSITORY, GRAPH_STORE_PORT } from '../../../shared/di.tokens';
+import { ChatHistoryRepositoryPort } from '../../query/domain/ports/chat-history.repository.port';
+import { CHAT_HISTORY_REPOSITORY, DOCUMENT_REPOSITORY, GRAPH_STORE_PORT } from '../../../shared/di.tokens';
+
+const USAGE_DAYS = 14;
+const TOP_LIBRARY_LIMIT = 5;
 
 @Controller('admin')
 export class AdminController {
@@ -13,6 +17,8 @@ export class AdminController {
     private readonly configService: ConfigService<BrainConfig>,
     @Inject(DOCUMENT_REPOSITORY)
     private readonly documentRepository: DocumentRepositoryPort,
+    @Inject(CHAT_HISTORY_REPOSITORY)
+    private readonly chatHistoryRepository: ChatHistoryRepositoryPort,
     @Inject(GRAPH_STORE_PORT)
     private readonly graphStore: GraphStorePort,
   ) {}
@@ -36,7 +42,26 @@ export class AdminController {
       neo4j = { status: 'down' };
     }
 
-    const documents = await this.listScopedDocuments(tenantId, libraryId);
+    const [
+      totalDocuments,
+      documents,
+      documentIngestedByDay,
+      documentsByLibrary,
+      documentsBySource,
+      totalQueries,
+      queriesByDay,
+      queriesByLibrary,
+    ] = await Promise.all([
+      this.documentRepository.countDocuments(tenantId, libraryId),
+      this.listScopedDocuments(tenantId, libraryId),
+      this.documentRepository.getDocumentIngestionByDay(USAGE_DAYS, tenantId, libraryId),
+      this.documentRepository.getTopLibrariesByDocumentCount(TOP_LIBRARY_LIMIT, tenantId, libraryId),
+      this.documentRepository.getDocumentCountBySource(tenantId, libraryId),
+      this.chatHistoryRepository.countQueries(tenantId, libraryId),
+      this.chatHistoryRepository.getQueryCountByDay(USAGE_DAYS, tenantId, libraryId),
+      this.chatHistoryRepository.getTopLibrariesByQueryCount(TOP_LIBRARY_LIMIT, tenantId, libraryId),
+    ]);
+
     return {
       health: {
         status: neo4j.status === 'up' ? 'ok' : 'degraded',
@@ -51,9 +76,21 @@ export class AdminController {
         latency_ms: Date.now() - startedAt,
       },
       documents: {
-        total: documents.length,
+        total: totalDocuments,
         byStatus: this.countByStatus(documents),
         recent: documents.slice(0, 10),
+      },
+      usage: {
+        documents: {
+          ingestedByDay: this.fillDateSeries(USAGE_DAYS, documentIngestedByDay),
+          byLibrary: documentsByLibrary,
+          bySource: documentsBySource,
+        },
+        queries: {
+          total: totalQueries,
+          byDay: this.fillDateSeries(USAGE_DAYS, queriesByDay),
+          byLibrary: queriesByLibrary,
+        },
       },
     };
   }
@@ -73,6 +110,25 @@ export class AdminController {
       accumulator[document.status] = (accumulator[document.status] ?? 0) + 1;
       return accumulator;
     }, {});
+  }
+
+  private fillDateSeries(days: number, source: Array<{ date: string; count: number }>): Array<{ date: string; count: number }> {
+    const normalized = new Map(source.map((entry) => [entry.date, entry.count]));
+    const dateSeries: Array<{ date: string; count: number }> = [];
+    const startDate = new Date();
+    startDate.setUTCHours(0, 0, 0, 0);
+    startDate.setUTCDate(startDate.getUTCDate() - (days - 1));
+
+    for (let index = 0; index < days; index += 1) {
+      const current = new Date(startDate);
+      current.setUTCDate(startDate.getUTCDate() + index);
+      const date = current.toISOString().slice(0, 10);
+      dateSeries.push({
+        date,
+        count: normalized.get(date) ?? 0,
+      });
+    }
+    return dateSeries;
   }
 
   private resolveTenantId(rawTenantId?: string): string | undefined {

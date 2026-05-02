@@ -17,8 +17,8 @@ export function DocumentationPage() {
   return (
     <div className="page-stack">
       <div>
-        <p className="eyebrow">Guias</p>
-        <h2 className="page-title">Documentacion</h2>
+        <p className="eyebrow">Ayuda</p>
+        <h2 className="page-title">Documentacion operativa</h2>
         <p className="muted-text">
           Elige el flujo que necesitas y sigue los pasos recomendados.
         </p>

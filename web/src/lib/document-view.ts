@@ -26,9 +26,19 @@ export function formatGraphSyncLabel(graphSyncStatus: string): string {
 }
 
 export function getPreviewText(document: DocumentRecord): string {
+  const maxLength = 120;
+  function truncate(text: string): string {
+    const normalized = text.replace(/\s+/g, ' ').trim();
+    if (normalized.length <= maxLength) {
+      return normalized;
+    }
+
+    return `${normalized.slice(0, maxLength).trimEnd()}...`;
+  }
+
   const summarized = document.previewText?.trim();
   if (summarized) {
-    return summarized;
+    return truncate(summarized);
   }
 
   const text = document.rawText?.trim();
@@ -36,7 +46,7 @@ export function getPreviewText(document: DocumentRecord): string {
     return 'Este documento aun no tiene contenido de texto disponible.';
   }
 
-  return text.replace(/\s+/g, ' ').slice(0, 240);
+  return truncate(text);
 }
 
 export function formatSourceLabel(source?: DocumentSource): string {

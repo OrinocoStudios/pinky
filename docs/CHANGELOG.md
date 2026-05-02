@@ -4,6 +4,23 @@ Este registro resume cambios de implementación para mantener contexto operativo
 
 ---
 
+## 2026-05-02 (Dashboard usage analytics)
+
+### Added
+
+- Agregados de uso en backend para dashboard: ingesta de documentos por dia, top libraries por documentos, distribucion por origen y consultas persistidas por dia/library.
+- Campo `usage` en `GET /admin/overview` con series de 14 dias y top 5 libraries.
+- Persistencia de `tenantId` en `ChatMessage` para mejorar scoping de analitica futura.
+- Seccion visual de graficas en dashboard web usando `recharts`.
+
+### Changed
+
+- `GraphRagQueryUseCase` ahora guarda `tenantId` junto con `sessionId`/`libraryId` al persistir mensajes de chat.
+- Contratos frontend (`OverviewResponse`) y mocks de tests actualizados para el nuevo bloque `usage`.
+- Documentacion API ampliada con el contrato de `GET /admin/overview`.
+
+---
+
 ## 2026-04-04 (Neo4j-only persistence)
 
 ### Added

@@ -109,12 +109,18 @@ describe('Documents (e2e)', () => {
   // ── GET /documents ───────────────────────────────────────────
 
   describe('GET /documents', () => {
-    it('should return empty array when no documents', async () => {
+    it('should return empty paginated result when no documents', async () => {
       const res = await request(app.getHttpServer())
         .get('/documents')
         .expect(200);
 
-      expect(res.body).toEqual([]);
+      expect(res.body).toEqual({
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize: 24,
+        totalPages: 0,
+      });
     });
 
     it('should return ingested documents', async () => {
@@ -130,11 +136,15 @@ describe('Documents (e2e)', () => {
         .get('/documents')
         .expect(200);
 
-      expect(res.body).toHaveLength(2);
-      expect(res.body[0].title).toBeDefined();
-      expect(res.body[1].title).toBeDefined();
-      expect(res.body[0].rawText).toBeUndefined();
-      expect(res.body[0].previewText).toBeDefined();
+      expect(res.body.total).toBe(2);
+      expect(res.body.page).toBe(1);
+      expect(res.body.pageSize).toBe(24);
+      expect(res.body.totalPages).toBe(1);
+      expect(res.body.items).toHaveLength(2);
+      expect(res.body.items[0].title).toBeDefined();
+      expect(res.body.items[1].title).toBeDefined();
+      expect(res.body.items[0].rawText).toBeUndefined();
+      expect(res.body.items[0].previewText).toBeDefined();
     });
   });
 

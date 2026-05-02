@@ -63,25 +63,25 @@ describe('QueryPage', () => {
   it('submits query with all advanced parameters', async () => {
     renderWithAppProviders(<QueryPage />);
 
-    await screen.findByText('Query Workbench');
+    await screen.findByText('Centro de consultas');
 
-    fireEvent.change(screen.getByPlaceholderText('Ask Pinky about the data currently ingested in the system'), {
+    fireEvent.change(screen.getByPlaceholderText('Pregunta sobre los datos actualmente ingeridos en el sistema'), {
       target: { value: 'What are the main entities in the document?' },
     });
 
-    const sessionIdInput = screen.getAllByPlaceholderText(/Session ID/i)[0];
+    const sessionIdInput = screen.getAllByPlaceholderText(/Sesion ID/i)[0];
     fireEvent.change(sessionIdInput, { target: { value: mockSessionId } });
 
     const topKInput = screen.getAllByPlaceholderText(/Top K/i)[0];
     fireEvent.change(topKInput, { target: { value: '10' } });
 
-    const hintsInput = screen.getAllByPlaceholderText(/Entity Hints/i)[0];
+    const hintsInput = screen.getAllByPlaceholderText(/Pistas de entidad/i)[0];
     fireEvent.change(hintsInput, { target: { value: 'Document, Section' } });
 
     const libraryInput = screen.getAllByPlaceholderText(/Library IDs/i)[0];
     fireEvent.change(libraryInput, { target: { value: 'lib-1, lib-2' } });
 
-    const submitButton = screen.getByRole('button', { name: 'Run query' });
+    const submitButton = screen.getByRole('button', { name: 'Consultar' });
     fireEvent.click(submitButton);
 
     await waitFor(() => expect(submitSpy).toHaveBeenCalledTimes(1));
@@ -89,17 +89,14 @@ describe('QueryPage', () => {
     await screen.findByText(/This is the generated answer/i);
 
 
-    await screen.findByText('Fast Context');
-    await screen.findByText('Truth Facts');
+    await screen.findByText('Contexto rapido');
+    await screen.findByText('Hechos base');
 
     const answerText = await screen.findByText(/This is the generated answer/i);
     expect(answerText).toBeInTheDocument();
-    const modelCard = screen.getByText('Model').closest('.status-card');
-    const tokensCard = screen.getByText('Tokens').closest('.status-card');
-    const sourcesCardLabel = screen
-      .getAllByText('Sources')
-      .find((node) => Boolean(node.closest('.status-card')));
-    const sourcesCard = sourcesCardLabel?.closest('.status-card') ?? null;
+    const modelCard = screen.getByTestId('query-metric-model');
+    const tokensCard = screen.getByTestId('query-metric-tokens');
+    const sourcesCard = screen.getByTestId('query-metric-sources');
     expect(modelCard).not.toBeNull();
     expect(tokensCard).not.toBeNull();
     expect(sourcesCard).not.toBeNull();
@@ -116,13 +113,13 @@ describe('QueryPage', () => {
   it('saves query and sessionId to localStorage', async () => {
     renderWithAppProviders(<QueryPage />);
 
-    const queryInput = screen.getByPlaceholderText('Ask Pinky about the data currently ingested in the system');
-    const sessionIdInput = screen.getAllByPlaceholderText(/Session ID/i)[0];
+    const queryInput = screen.getByPlaceholderText('Pregunta sobre los datos actualmente ingeridos en el sistema');
+    const sessionIdInput = screen.getAllByPlaceholderText(/Sesion ID/i)[0];
 
     fireEvent.change(queryInput, { target: { value: 'Test query' } });
     fireEvent.change(sessionIdInput, { target: { value: 'test-session-123' } });
 
-    const submitButton = screen.getByRole('button', { name: 'Run query' });
+    const submitButton = screen.getByRole('button', { name: 'Consultar' });
     fireEvent.click(submitButton);
 
     await waitFor(() => expect(submitSpy).toHaveBeenCalledTimes(1));
@@ -140,19 +137,19 @@ describe('QueryPage', () => {
   it('displays fastContext and truthFacts in the response', async () => {
     renderWithAppProviders(<QueryPage />);
 
-    const queryInput = screen.getByPlaceholderText('Ask Pinky about the data currently ingested in the system');
+    const queryInput = screen.getByPlaceholderText('Pregunta sobre los datos actualmente ingeridos en el sistema');
     fireEvent.change(queryInput, { target: { value: 'What entities exist?' } });
 
-    const submitButton = screen.getByRole('button', { name: 'Run query' });
+    const submitButton = screen.getByRole('button', { name: 'Consultar' });
     fireEvent.click(submitButton);
 
-    await screen.findByText('Answer');
+    await screen.findByText('Respuesta');
 
     await waitFor(() => {
-      const fastContextSection = screen.getByText('Fast Context');
+      const fastContextSection = screen.getByText('Contexto rapido');
       expect(fastContextSection).toBeInTheDocument();
 
-      const truthSection = screen.getByText('Truth Facts');
+      const truthSection = screen.getByText('Hechos base');
       expect(truthSection).toBeInTheDocument();
     });
 
@@ -163,13 +160,13 @@ describe('QueryPage', () => {
   it('displays chat history panel when sessionId is provided', async () => {
     renderWithAppProviders(<QueryPage />);
 
-    const sessionIdInput = screen.getAllByRole('textbox', { name: /Session ID/i })[0];
+    const sessionIdInput = screen.getAllByRole('textbox', { name: /Sesion ID/i })[0];
     fireEvent.change(sessionIdInput, { target: { value: mockSessionId } });
 
-    const submitButton = screen.getByRole('button', { name: 'Run query' });
+    const submitButton = screen.getByRole('button', { name: 'Consultar' });
     fireEvent.click(submitButton);
 
-    await screen.findByText('Chat History');
+    await screen.findByText('Historial');
 
     await waitFor(() => expect(historySpy).toHaveBeenCalled());
 
@@ -189,11 +186,11 @@ describe('QueryPage', () => {
     );
     renderWithAppProviders(<QueryPage />);
 
-    const queryInput = screen.getByPlaceholderText('Ask Pinky about the data currently ingested in the system');
+    const queryInput = screen.getByPlaceholderText('Pregunta sobre los datos actualmente ingeridos en el sistema');
     fireEvent.change(queryInput, { target: { value: 'Running query test' } });
-    const submitButton = screen.getByRole('button', { name: 'Run query' });
+    const submitButton = screen.getByRole('button', { name: 'Consultar' });
     fireEvent.click(submitButton);
-    await screen.findByRole('button', { name: 'Running query...' });
+    await screen.findByRole('button', { name: 'Ejecutando consulta...' });
     await waitFor(() => expect(submitSpy).toHaveBeenCalledTimes(1));
 
     await screen.findByText(/This is the generated answer/i);
@@ -208,13 +205,13 @@ describe('QueryPage', () => {
 
     renderWithAppProviders(<QueryPage />);
 
-    const queryInput = screen.getByPlaceholderText('Ask Pinky about the data currently ingested in the system');
+    const queryInput = screen.getByPlaceholderText('Pregunta sobre los datos actualmente ingeridos en el sistema');
     fireEvent.change(queryInput, { target: { value: 'Failing query' } });
 
-    const submitButton = screen.getByRole('button', { name: 'Run query' });
+    const submitButton = screen.getByRole('button', { name: 'Consultar' });
     fireEvent.click(submitButton);
 
-    await screen.findByText('Unable to run query.');
+    await screen.findByText('No se pudo ejecutar la consulta.');
   });
 
   it('uses existing sessionId from localStorage', async () => {
@@ -223,15 +220,15 @@ describe('QueryPage', () => {
 
     renderWithAppProviders(<QueryPage />);
 
-    await screen.findByText('Query Workbench');
+    await screen.findByText('Centro de consultas');
 
-    const queryInput = screen.getByPlaceholderText('Ask Pinky about the data currently ingested in the system');
+    const queryInput = screen.getByPlaceholderText('Pregunta sobre los datos actualmente ingeridos en el sistema');
     expect(queryInput).toHaveValue('Previous query');
 
-    const sessionIdInput = screen.getAllByRole('textbox', { name: /Session ID/i })[0];
+    const sessionIdInput = screen.getAllByRole('textbox', { name: /Sesion ID/i })[0];
     expect(sessionIdInput).toHaveValue('saved-session-456');
 
-    const submitButton = screen.getByRole('button', { name: 'Run query' });
+    const submitButton = screen.getByRole('button', { name: 'Consultar' });
     fireEvent.click(submitButton);
 
     await waitFor(() => expect(submitSpy).toHaveBeenCalledTimes(1));
@@ -240,7 +237,7 @@ describe('QueryPage', () => {
   it('does not submit empty query', async () => {
     renderWithAppProviders(<QueryPage />);
 
-    const submitButton = screen.getByRole('button', { name: 'Run query' });
+    const submitButton = screen.getByRole('button', { name: 'Consultar' });
     fireEvent.click(submitButton);
 
     await waitFor(() => expect(submitSpy).not.toHaveBeenCalled());
@@ -249,13 +246,13 @@ describe('QueryPage', () => {
   it('trims input values before submission', async () => {
     renderWithAppProviders(<QueryPage />);
 
-    const queryInput = screen.getByPlaceholderText('Ask Pinky about the data currently ingested in the system');
+    const queryInput = screen.getByPlaceholderText('Pregunta sobre los datos actualmente ingeridos en el sistema');
     fireEvent.change(queryInput, { target: { value: '  Query with spaces  ' } });
 
-    const sessionIdInput = screen.getAllByRole('textbox', { name: /Session ID/i })[0];
+    const sessionIdInput = screen.getAllByRole('textbox', { name: /Sesion ID/i })[0];
     fireEvent.change(sessionIdInput, { target: { value: '  session-id-123  ' } });
 
-    const submitButton = screen.getByRole('button', { name: 'Run query' });
+    const submitButton = screen.getByRole('button', { name: 'Consultar' });
     fireEvent.click(submitButton);
 
     await waitFor(() => expect(submitSpy).toHaveBeenCalledTimes(1));

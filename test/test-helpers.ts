@@ -120,33 +120,99 @@ export class InMemoryDocumentRepository implements DocumentRepositoryPort {
     }
   }
 
-  async listDocuments(limit = 50, libraryId?: string): Promise<DocumentRecord[]> {
+  async listDocuments(limit = 50, libraryId?: string, offset = 0): Promise<DocumentRecord[]> {
     return [...this.documents]
       .filter((document) => !libraryId || document.libraryId === libraryId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .slice(0, limit);
+      .slice(offset, offset + limit);
   }
 
   async listDocumentsByTenant(
     tenantId: string,
     limit = 50,
     libraryId?: string,
+    offset = 0,
   ): Promise<DocumentRecord[]> {
     return this.documents
       .filter((document) => document.tenantId === tenantId && (!libraryId || document.libraryId === libraryId))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .slice(0, limit);
+      .slice(offset, offset + limit);
   }
 
   async listDocumentsByLibrary(
     libraryId: string,
     tenantId?: string,
     limit = 50,
+    offset = 0,
   ): Promise<DocumentRecord[]> {
     return this.documents
       .filter((document) => document.libraryId === libraryId && (!tenantId || document.tenantId === tenantId))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .slice(0, limit);
+      .slice(offset, offset + limit);
+  }
+
+  async countDocuments(tenantId?: string, libraryId?: string): Promise<number> {
+    return this.documents.filter(
+      (document) =>
+        (!tenantId || document.tenantId === tenantId) &&
+        (!libraryId || document.libraryId === libraryId),
+    ).length;
+  }
+
+  async getDocumentIngestionByDay(
+    days: number,
+    tenantId?: string,
+    libraryId?: string,
+  ): Promise<Array<{ date: string; count: number }>> {
+    const start = new Date();
+    start.setUTCHours(0, 0, 0, 0);
+    start.setUTCDate(start.getUTCDate() - Math.max(days - 1, 0));
+    const counts = new Map<string, number>();
+    for (const document of this.documents) {
+      if (tenantId && document.tenantId !== tenantId) continue;
+      if (libraryId && document.libraryId !== libraryId) continue;
+      const date = new Date(document.createdAt);
+      if (Number.isNaN(date.getTime()) || date < start) continue;
+      const key = date.toISOString().slice(0, 10);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  async getTopLibrariesByDocumentCount(
+    limit: number,
+    tenantId?: string,
+    libraryId?: string,
+  ): Promise<Array<{ libraryId: string; count: number }>> {
+    const counts = new Map<string, number>();
+    for (const document of this.documents) {
+      if (tenantId && document.tenantId !== tenantId) continue;
+      if (libraryId && document.libraryId !== libraryId) continue;
+      if (!document.libraryId) continue;
+      counts.set(document.libraryId, (counts.get(document.libraryId) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([libraryId, count]) => ({ libraryId, count }))
+      .sort((a, b) => b.count - a.count || a.libraryId.localeCompare(b.libraryId))
+      .slice(0, Math.max(limit, 1));
+  }
+
+  async getDocumentCountBySource(
+    tenantId?: string,
+    libraryId?: string,
+  ): Promise<Array<{ source: string; count: number }>> {
+    const counts = new Map<string, number>();
+    for (const document of this.documents) {
+      if (tenantId && document.tenantId !== tenantId) continue;
+      if (libraryId && document.libraryId !== libraryId) continue;
+      const source = document.source?.kind ?? 'unknown';
+      counts.set(source, (counts.get(source) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([source, count]) => ({ source, count }))
+      .sort((a, b) => b.count - a.count || a.source.localeCompare(b.source));
   }
 
   async listDocumentScopes(): Promise<{ tenants: string[]; libraries: string[] }> {
@@ -303,6 +369,57 @@ export class MockChatHistoryRepository implements ChatHistoryRepositoryPort {
 
   async getBySessionId(sessionId: string): Promise<ChatMessage[]> {
     return this.messages.filter((message) => message.sessionId === sessionId);
+  }
+
+  async countQueries(tenantId?: string, libraryId?: string): Promise<number> {
+    return this.messages.filter(
+      (message) =>
+        message.role === 'user' &&
+        (!tenantId || message.tenantId === tenantId) &&
+        (!libraryId || message.libraryId === libraryId),
+    ).length;
+  }
+
+  async getQueryCountByDay(
+    days: number,
+    tenantId?: string,
+    libraryId?: string,
+  ): Promise<Array<{ date: string; count: number }>> {
+    const start = new Date();
+    start.setUTCHours(0, 0, 0, 0);
+    start.setUTCDate(start.getUTCDate() - Math.max(days - 1, 0));
+    const counts = new Map<string, number>();
+    for (const message of this.messages) {
+      if (message.role !== 'user') continue;
+      if (tenantId && message.tenantId !== tenantId) continue;
+      if (libraryId && message.libraryId !== libraryId) continue;
+      const createdAt = new Date(message.createdAt);
+      if (Number.isNaN(createdAt.getTime()) || createdAt < start) continue;
+      const key = createdAt.toISOString().slice(0, 10);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  async getTopLibrariesByQueryCount(
+    limit: number,
+    tenantId?: string,
+    libraryId?: string,
+  ): Promise<Array<{ libraryId: string; count: number }>> {
+    const counts = new Map<string, number>();
+    for (const message of this.messages) {
+      if (message.role !== 'user') continue;
+      if (tenantId && message.tenantId !== tenantId) continue;
+      if (libraryId && message.libraryId !== libraryId) continue;
+      if (!message.libraryId) continue;
+      counts.set(message.libraryId, (counts.get(message.libraryId) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([libraryId, count]) => ({ libraryId, count }))
+      .sort((a, b) => b.count - a.count || a.libraryId.localeCompare(b.libraryId))
+      .slice(0, Math.max(limit, 1));
   }
 
   async clearSession(sessionId: string): Promise<void> {

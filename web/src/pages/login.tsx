@@ -26,39 +26,39 @@ export function LoginPage() {
       await devLoginMutation.mutateAsync({ email: devEmail });
       navigate('/', { replace: true });
     } catch (error) {
-      setDevError(error instanceof Error ? error.message : 'Dev login failed');
+      setDevError(error instanceof Error ? error.message : 'No se pudo iniciar sesion en modo dev');
     }
   }
 
   return (
     <div className="login-screen">
       <div className="login-card">
-        <p className="eyebrow">Pinky</p>
-        <h1>Admin access only</h1>
+        <p className="eyebrow">Biblioteca</p>
+        <h1>Acceso administrativo</h1>
         <p className="muted-text">
-          Sign in with an allowlisted admin account.
+          Inicia sesion con una cuenta habilitada para gestionar documentos.
         </p>
         {googleEnabled || githubEnabled ? (
           <div className="login-actions">
             {googleEnabled ? (
               <a className="primary-button" href={getProviderLoginUrl('google')}>
-                Continue with Google
+                Continuar con Google
               </a>
             ) : null}
             {githubEnabled ? (
               <a className={googleEnabled ? 'secondary-button' : 'primary-button'} href={getProviderLoginUrl('github')}>
-                Continue with GitHub
+                Continuar con GitHub
               </a>
             ) : null}
           </div>
         ) : providersQuery.isSuccess ? (
-          <p className="muted-text">OAuth disabled in this environment.</p>
+          <p className="muted-text">OAuth deshabilitado en este entorno.</p>
         ) : null}
 
         {providersQuery.data?.devLogin ? (
           <form className="dev-login" onSubmit={handleDevLogin}>
             <label className="dev-login-label" htmlFor="dev-email">
-              Local dev access
+              Acceso local de desarrollo
             </label>
             <input
               id="dev-email"
@@ -68,7 +68,7 @@ export function LoginPage() {
               onChange={(event) => setDevEmail(event.target.value)}
             />
             <button className="secondary-button" type="submit" disabled={!devEmail.trim() || devLoginMutation.isPending}>
-              {devLoginMutation.isPending ? 'Signing in...' : 'Sign in without OAuth'}
+              {devLoginMutation.isPending ? 'Iniciando sesion...' : 'Entrar sin OAuth'}
             </button>
             {devError ? <p className="error-text">{devError}</p> : null}
           </form>

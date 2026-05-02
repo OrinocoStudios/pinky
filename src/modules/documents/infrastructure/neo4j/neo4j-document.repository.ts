@@ -198,24 +198,143 @@ export class Neo4jDocumentRepository implements DocumentRepositoryPort, OnModule
     }
   }
 
-  async listDocuments(limit = 50, libraryId?: string): Promise<DocumentRecord[]> {
-    return this.listDocumentsByScope(limit, undefined, libraryId);
+  async listDocuments(limit?: number, libraryId?: string, offset?: number): Promise<DocumentRecord[]> {
+    return this.listDocumentsByScope(limit, undefined, libraryId, offset);
   }
 
   async listDocumentsByTenant(
     tenantId: string,
-    limit = 50,
+    limit?: number,
     libraryId?: string,
+    offset?: number,
   ): Promise<DocumentRecord[]> {
-    return this.listDocumentsByScope(limit, tenantId, libraryId);
+    return this.listDocumentsByScope(limit, tenantId, libraryId, offset);
   }
 
   async listDocumentsByLibrary(
     libraryId: string,
     tenantId?: string,
-    limit = 50,
+    limit?: number,
+    offset?: number,
   ): Promise<DocumentRecord[]> {
-    return this.listDocumentsByScope(limit, tenantId, libraryId);
+    return this.listDocumentsByScope(limit, tenantId, libraryId, offset);
+  }
+
+  async countDocuments(tenantId?: string, libraryId?: string): Promise<number> {
+    const session = this.neo4j.getSession();
+    try {
+      const result = await session.run(
+        `
+        MATCH (d:Document)
+        WHERE ($tenantId IS NULL OR d.tenantId = $tenantId)
+          AND ($libraryId IS NULL OR d.libraryId = $libraryId)
+        RETURN count(d) AS total
+        `,
+        { tenantId: tenantId ?? null, libraryId: libraryId ?? null },
+      );
+      const total = result.records[0]?.get('total');
+      return this.asNumber(total);
+    } finally {
+      await session.close();
+    }
+  }
+
+  async getDocumentIngestionByDay(
+    days: number,
+    tenantId?: string,
+    libraryId?: string,
+  ): Promise<Array<{ date: string; count: number }>> {
+    const session = this.neo4j.getSession();
+    try {
+      const result = await session.run(
+        `
+        WITH date() - duration({days: $days - 1}) AS startDate
+        MATCH (d:Document)
+        WHERE ($tenantId IS NULL OR d.tenantId = $tenantId)
+          AND ($libraryId IS NULL OR d.libraryId = $libraryId)
+          AND d.createdAt IS NOT NULL
+        WITH date(d.createdAt) AS day, startDate
+        WHERE day >= startDate
+        RETURN toString(day) AS date, count(*) AS count
+        ORDER BY day ASC
+        `,
+        {
+          days: int(Math.max(days, 1)),
+          tenantId: tenantId ?? null,
+          libraryId: libraryId ?? null,
+        },
+      );
+      return result.records.map((record) => ({
+        date: String(record.get('date')),
+        count: this.asNumber(record.get('count')),
+      }));
+    } finally {
+      await session.close();
+    }
+  }
+
+  async getTopLibrariesByDocumentCount(
+    limit: number,
+    tenantId?: string,
+    libraryId?: string,
+  ): Promise<Array<{ libraryId: string; count: number }>> {
+    const session = this.neo4j.getSession();
+    try {
+      const result = await session.run(
+        `
+        MATCH (d:Document)
+        WHERE ($tenantId IS NULL OR d.tenantId = $tenantId)
+          AND ($libraryId IS NULL OR d.libraryId = $libraryId)
+          AND d.libraryId IS NOT NULL
+          AND trim(d.libraryId) <> ''
+        RETURN d.libraryId AS libraryId, count(*) AS count
+        ORDER BY count DESC, libraryId ASC
+        LIMIT $limit
+        `,
+        {
+          tenantId: tenantId ?? null,
+          libraryId: libraryId ?? null,
+          limit: int(Math.max(limit, 1)),
+        },
+      );
+      return result.records.map((record) => ({
+        libraryId: String(record.get('libraryId')),
+        count: this.asNumber(record.get('count')),
+      }));
+    } finally {
+      await session.close();
+    }
+  }
+
+  async getDocumentCountBySource(
+    tenantId?: string,
+    libraryId?: string,
+  ): Promise<Array<{ source: string; count: number }>> {
+    const session = this.neo4j.getSession();
+    try {
+      const result = await session.run(
+        `
+        MATCH (d:Document)
+        WHERE ($tenantId IS NULL OR d.tenantId = $tenantId)
+          AND ($libraryId IS NULL OR d.libraryId = $libraryId)
+        WITH CASE
+          WHEN d.sourceJson CONTAINS '"kind":"upload"' THEN 'upload'
+          WHEN d.sourceJson CONTAINS '"kind":"url"' THEN 'url'
+          WHEN d.sourceJson CONTAINS '"kind":"generated"' THEN 'generated'
+          ELSE 'unknown'
+        END AS source
+        RETURN source, count(*) AS count
+        ORDER BY count DESC, source ASC
+        `,
+        { tenantId: tenantId ?? null, libraryId: libraryId ?? null },
+      );
+      return result.records.map((record) => ({
+        source: String(record.get('source')),
+        count: this.asNumber(record.get('count')),
+      }));
+    } finally {
+      await session.close();
+    }
   }
 
   async listDocumentScopes(): Promise<{ tenants: string[]; libraries: string[] }> {
@@ -330,11 +449,16 @@ export class Neo4jDocumentRepository implements DocumentRepositoryPort, OnModule
   }
 
   private async listDocumentsByScope(
-    limit: number,
+    limit?: number,
     tenantId?: string,
     libraryId?: string,
+    offset = 0,
   ): Promise<DocumentRecord[]> {
     const session = this.neo4j.getSession();
+    const hasLimit = typeof limit === 'number' && Number.isFinite(limit) && limit > 0;
+    const limitClause = hasLimit ? 'LIMIT $limit' : '';
+    const hasOffset = Number.isFinite(offset) && offset > 0;
+    const skipClause = hasOffset ? 'SKIP $offset' : '';
     try {
       const result = await session.run(
         `
@@ -343,9 +467,15 @@ export class Neo4jDocumentRepository implements DocumentRepositoryPort, OnModule
           AND ($libraryId IS NULL OR d.libraryId = $libraryId)
         RETURN d
         ORDER BY d.createdAt DESC
-        LIMIT $limit
+        ${skipClause}
+        ${limitClause}
         `,
-        { tenantId: tenantId ?? null, libraryId: libraryId ?? null, limit: int(limit) },
+        {
+          tenantId: tenantId ?? null,
+          libraryId: libraryId ?? null,
+          ...(hasOffset ? { offset: int(offset) } : {}),
+          ...(hasLimit ? { limit: int(limit as number) } : {}),
+        },
       );
       return result.records.map((record) => this.mapDocumentNode(record.get('d').properties));
     } finally {

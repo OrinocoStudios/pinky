@@ -8,6 +8,7 @@ export const queryKeys = {
   },
   documents: {
     all: () => ['documents'] as const,
+    page: (page: number, pageSize: number) => ['documents', 'page', page, pageSize] as const,
     byId: (documentId: string) => ['documents', documentId] as const,
     scopes: () => ['documents', 'scopes'] as const,
   },

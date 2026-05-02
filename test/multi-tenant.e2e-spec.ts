@@ -82,8 +82,9 @@ describe('Multi-tenant (e2e)', () => {
       .get('/documents')
       .set('X-Tenant-Id', 'tenant-a')
       .expect(200);
-    expect(docsA.body).toHaveLength(1);
-    expect(docsA.body[0].documentId).toBe(created.body.documentId);
+    expect(docsA.body.total).toBe(1);
+    expect(docsA.body.items).toHaveLength(1);
+    expect(docsA.body.items[0].documentId).toBe(created.body.documentId);
   });
 
   it('requires X-Tenant-Id on index endpoints when enabled', async () => {

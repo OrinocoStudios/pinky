@@ -6,47 +6,47 @@ export function ResourcesPage() {
   const { data, isLoading, error } = useHealth();
 
   if (isLoading) {
-    return <PageStateLoading message="Loading resources..." />;
+    return <PageStateLoading message="Cargando recursos..." />;
   }
 
   if (error || !data) {
-    return <PageStateError title="Unable to load resources." />;
+    return <PageStateError title="No se pudo cargar recursos." />;
   }
 
   return (
     <div className="page-stack">
       <div>
-        <p className="eyebrow">Operations</p>
-        <h2 className="page-title">Resources</h2>
+        <p className="eyebrow">Ajustes</p>
+        <h2 className="page-title">Recursos de servicio</h2>
       </div>
 
       <section className="stats-grid">
         <article className="stat-card">
-          <span className="stat-label">Service</span>
+          <span className="stat-label">Servicio</span>
           <strong>{data.service}</strong>
         </article>
         <article className="stat-card">
-          <span className="stat-label">Status</span>
+          <span className="stat-label">Estado</span>
           <strong>{data.status}</strong>
         </article>
         <article className="stat-card">
-          <span className="stat-label">Timestamp</span>
+          <span className="stat-label">Hora</span>
           <strong>{new Date(data.timestamp).toLocaleTimeString()}</strong>
         </article>
         <article className="stat-card">
-          <span className="stat-label">Latency</span>
+          <span className="stat-label">Latencia</span>
           <strong>{data.latency_ms} ms</strong>
         </article>
       </section>
 
       <article className="panel">
-        <h3>Service details</h3>
+        <h3>Detalle por servicio</h3>
         <div className="status-grid">
           {Object.entries(data.services).map(([name, service]) => (
             <div key={name} className="status-card">
               <span>{name}</span>
               <strong>{service.status}</strong>
-              <small>{service.provider ? `provider: ${service.provider}` : `${service.latency_ms ?? 'n/a'} ms`}</small>
+              <small>{service.provider ? `proveedor: ${service.provider}` : `${service.latency_ms ?? 'n/a'} ms`}</small>
             </div>
           ))}
         </div>

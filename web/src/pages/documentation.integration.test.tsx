@@ -7,7 +7,7 @@ describe('DocumentationPage', () => {
   it('renders section selector with three buttons', async () => {
     renderWithAppProviders(<DocumentationPage />);
 
-    await screen.findByText('Documentacion');
+    await screen.findByText('Documentacion operativa');
     expect(screen.getByRole('tab', { name: 'Despliegue' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Instalacion' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Integracion pinky-mcp' })).toBeInTheDocument();

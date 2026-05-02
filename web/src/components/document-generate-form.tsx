@@ -18,7 +18,7 @@ export function DocumentGenerateForm({ isPending, onSubmit }: DocumentGenerateFo
     setError(null);
 
     if (!useCaseId.trim()) {
-      setError('useCaseId is required');
+      setError('useCaseId es obligatorio');
       return;
     }
 
@@ -32,29 +32,29 @@ export function DocumentGenerateForm({ isPending, onSubmit }: DocumentGenerateFo
       setTitle('');
       setParamsText('');
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Unable to generate document');
+      setError(submitError instanceof Error ? submitError.message : 'No se pudo generar el documento');
     }
   }
 
   return (
     <form className="panel page-stack compact-gap" onSubmit={handleSubmit}>
       <div>
-        <h3>Generate document</h3>
-        <p className="muted-text">Use backend templates to produce a new document.</p>
+        <h3>Generar documento</h3>
+        <p className="muted-text">Usa plantillas del backend para producir un documento nuevo.</p>
       </div>
       <input className="search-input form-input" placeholder="useCaseId" value={useCaseId} onChange={(event) => setUseCaseId(event.target.value)} />
-      <input className="search-input form-input" placeholder="Optional title" value={title} onChange={(event) => setTitle(event.target.value)} />
+      <input className="search-input form-input" placeholder="Titulo opcional" value={title} onChange={(event) => setTitle(event.target.value)} />
       <textarea
         className="query-textarea"
         rows={3}
-        placeholder='Optional params JSON, e.g. {"region":"latam"}'
+        placeholder='Params JSON opcionales, ej: {"region":"latam"}'
         value={paramsText}
         onChange={(event) => setParamsText(event.target.value)}
       />
       {error ? <p className="error-text">{error}</p> : null}
       <div>
         <button className="primary-button" type="submit" disabled={isPending}>
-          {isPending ? 'Generating...' : 'Generate document'}
+          {isPending ? 'Generando...' : 'Generar documento'}
         </button>
       </div>
     </form>

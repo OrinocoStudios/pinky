@@ -176,4 +176,22 @@ describe('GraphRagQueryUseCase', () => {
     expect(promptArg).toContain('What did Einstein develop?');
     expect(promptArg).toContain('Einstein developed relativity.');
   });
+
+  it('should persist tenant scope in chat history', async () => {
+    await useCase.execute({
+      query: 'scope test',
+      topK: 5,
+      tenantId: 'tenant-1',
+      libraryIds: ['lib-1'],
+      sessionId: 'session-1',
+    });
+
+    expect(chatHistory.saveMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 'session-1',
+        tenantId: 'tenant-1',
+        libraryId: 'lib-1',
+      }),
+    );
+  });
 });

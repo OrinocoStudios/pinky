@@ -22,7 +22,7 @@ export function DocumentUploadForm({ isPending, onSubmit }: DocumentUploadFormPr
     setError(null);
 
     if (!file) {
-      setError('File is required');
+      setError('El archivo es obligatorio');
       return;
     }
 
@@ -40,33 +40,33 @@ export function DocumentUploadForm({ isPending, onSubmit }: DocumentUploadFormPr
         input.value = '';
       }
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Unable to upload document');
+      setError(submitError instanceof Error ? submitError.message : 'No se pudo subir el documento');
     }
   }
 
   return (
     <form className="panel page-stack compact-gap" onSubmit={handleSubmit}>
       <div>
-        <h3>Upload file</h3>
-        <p className="muted-text">Upload a file and let backend extract text before ingestion.</p>
+        <h3>Subir archivo</h3>
+        <p className="muted-text">Sube un archivo y deja que backend extraiga el texto antes de ingestar.</p>
       </div>
-      <input className="search-input form-input" placeholder="Optional title" value={title} onChange={(event) => setTitle(event.target.value)} />
+      <input className="search-input form-input" placeholder="Titulo opcional" value={title} onChange={(event) => setTitle(event.target.value)} />
       <label className="scope-field" htmlFor="document-upload-input">
-        <span>File</span>
+        <span>Archivo</span>
         <input id="document-upload-input" className="file-input" type="file" onChange={handleFileChange} />
       </label>
       <textarea
         className="query-textarea"
         rows={3}
-        placeholder='Optional metadata JSON, e.g. {"source":"upload"}'
+        placeholder='Metadata JSON opcional, ej: {"source":"upload"}'
         value={metadataText}
         onChange={(event) => setMetadataText(event.target.value)}
       />
-      {file ? <p className="muted-text">Selected: {file.name}</p> : null}
+      {file ? <p className="muted-text">Seleccionado: {file.name}</p> : null}
       {error ? <p className="error-text">{error}</p> : null}
       <div>
         <button className="primary-button" type="submit" disabled={isPending}>
-          {isPending ? 'Uploading...' : 'Upload document'}
+          {isPending ? 'Subiendo...' : 'Subir documento'}
         </button>
       </div>
     </form>

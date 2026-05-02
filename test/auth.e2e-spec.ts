@@ -110,5 +110,8 @@ describe('Auth and admin protection (e2e)', () => {
 
     expect(response.body.health.status).toBe('ok');
     expect(response.body.documents.total).toBe(0);
+    expect(response.body.usage).toBeDefined();
+    expect(Array.isArray(response.body.usage.documents.ingestedByDay)).toBe(true);
+    expect(response.body.usage.queries.total).toBe(0);
   });
 });

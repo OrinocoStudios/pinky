@@ -46,6 +46,14 @@ export type DocumentRecord = {
   metadata?: Record<string, unknown>;
 };
 
+export type DocumentsPageResponse = {
+  items: DocumentRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
 export type OverviewResponse = {
   health: {
     status: string;
@@ -67,6 +75,18 @@ export type OverviewResponse = {
       updatedAt: string;
       libraryId?: string;
     }>;
+  };
+  usage: {
+    documents: {
+      ingestedByDay: Array<{ date: string; count: number }>;
+      byLibrary: Array<{ libraryId: string; count: number }>;
+      bySource: Array<{ source: string; count: number }>;
+    };
+    queries: {
+      total: number;
+      byDay: Array<{ date: string; count: number }>;
+      byLibrary: Array<{ libraryId: string; count: number }>;
+    };
   };
 };
 

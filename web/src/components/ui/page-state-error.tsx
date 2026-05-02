@@ -4,8 +4,8 @@ type PageStateErrorProps = {
 };
 
 export function PageStateError({
-  title = 'Unable to load data.',
-  description = 'Try again or verify the remote service is reachable.',
+  title = 'No se pudo cargar datos.',
+  description = 'Reintenta o verifica que el servicio remoto este disponible.',
 }: PageStateErrorProps) {
   return (
     <div className="panel state-panel state-error">

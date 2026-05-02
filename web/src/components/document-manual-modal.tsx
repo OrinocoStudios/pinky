@@ -69,13 +69,13 @@ export function DocumentManualModal({
         className="dialog-card manual-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label="Add manual"
+        aria-label="Nuevo manual"
         onClick={(event) => event.stopPropagation()}
       >
         <form className="page-stack compact-gap" onSubmit={handleSubmit}>
           <div className="reader-header">
             <div>
-              <h3 className="dialog-title">Add manual</h3>
+              <h3 className="dialog-title">Nuevo documento manual</h3>
               <p className="muted-text">Crea un documento manual y define tenant/library existente o nueva.</p>
             </div>
             <button className="secondary-button" type="button" onClick={onClose}>

@@ -26,6 +26,18 @@ describe('data hooks', () => {
             byStatus: { READY: 2 },
             recent: [],
           },
+          usage: {
+            documents: {
+              ingestedByDay: [{ date: '2026-05-01', count: 2 }],
+              byLibrary: [{ libraryId: 'lib-a', count: 2 }],
+              bySource: [{ source: 'generated', count: 2 }],
+            },
+            queries: {
+              total: 3,
+              byDay: [{ date: '2026-05-01', count: 3 }],
+              byLibrary: [{ libraryId: 'lib-a', count: 3 }],
+            },
+          },
         }),
       ),
     );
@@ -40,8 +52,8 @@ describe('data hooks', () => {
   it('loads documents list', async () => {
     server.use(
       http.get('/documents', ({ request }) => {
-        expect(request.headers.get('x-tenant-id')).toBe('tenant-a');
-        expect(request.headers.get('x-library-id')).toBe('library-a');
+        expect(request.headers.get('x-tenant-id')).toBe('');
+        expect(request.headers.get('x-library-id')).toBe('');
 
         return HttpResponse.json([
           {
@@ -60,7 +72,8 @@ describe('data hooks', () => {
     const { result } = renderHook(() => useDocuments(), { wrapper: Wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toHaveLength(1);
+    expect(result.current.data?.items).toHaveLength(1);
+    expect(result.current.data?.total).toBe(1);
   });
 
   it('runs query mutation', async () => {

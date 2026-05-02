@@ -48,30 +48,29 @@ export function QueryPage() {
   }
  
   return (
-    <div className="page-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '24px' }}>
+    <div className="query-layout">
       <div className="page-stack">
         <div>
           <p className="eyebrow">GraphRAG</p>
-          <h2 className="page-title">Query Workbench</h2>
+          <h2 className="page-title">Centro de consultas</h2>
         </div>
  
         <form className="panel page-stack" onSubmit={handleSubmit}>
           <textarea
             className="query-textarea"
             rows={6}
-            placeholder="Ask Pinky about the data currently ingested in the system"
+            placeholder="Pregunta sobre los datos actualmente ingeridos en el sistema"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
  
-          <div className="status-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
+          <div className="status-grid query-form-grid">
             <div className="status-card">
-              <span>Session ID</span>
+              <span>Sesion ID</span>
               <input
-                className="search-input"
-                style={{ width: '100%', padding: '4px 8px', fontSize: '0.8rem' }}
-                aria-label="Session ID"
-                placeholder="Session ID"
+                className="search-input query-mini-input"
+                aria-label="Sesion ID"
+                placeholder="Sesion ID"
                 value={sessionId}
                 onChange={(event) => setSessionId(event.target.value)}
               />
@@ -79,8 +78,7 @@ export function QueryPage() {
             <div className="status-card">
               <span>Top K</span>
               <input
-                className="search-input"
-                style={{ width: '100%', padding: '4px 8px', fontSize: '0.8rem' }}
+                className="search-input query-mini-input"
                 type="number"
                 aria-label="Top K"
                 placeholder="Top K"
@@ -89,12 +87,11 @@ export function QueryPage() {
               />
             </div>
             <div className="status-card">
-              <span>Entity Hints (csv)</span>
+              <span>Pistas de entidad (csv)</span>
               <input
-                className="search-input"
-                style={{ width: '100%', padding: '4px 8px', fontSize: '0.8rem' }}
-                aria-label="Entity Hints"
-                placeholder="Entity Hints"
+                className="search-input query-mini-input"
+                aria-label="Pistas de entidad"
+                placeholder="Pistas de entidad"
                 value={hintsText}
                 onChange={(event) => setHintsText(event.target.value)}
               />
@@ -102,8 +99,7 @@ export function QueryPage() {
             <div className="status-card">
               <span>Library IDs (csv)</span>
               <input
-                className="search-input"
-                style={{ width: '100%', padding: '4px 8px', fontSize: '0.8rem' }}
+                className="search-input query-mini-input"
                 aria-label="Library IDs"
                 placeholder="Library IDs"
                 value={libraryIdsText}
@@ -114,24 +110,24 @@ export function QueryPage() {
  
           <div>
             <button className="primary-button" type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Running query...' : 'Run query'}
+              {mutation.isPending ? 'Ejecutando consulta...' : 'Consultar'}
             </button>
           </div>
         </form>
  
-        {mutation.isError ? <PageStateError title="Unable to run query." description="Check auth, scope or backend availability." /> : null}
+        {mutation.isError ? <PageStateError title="No se pudo ejecutar la consulta." description="Revisa auth, scope o disponibilidad del backend." /> : null}
  
         {mutation.data ? (
           <div className="panel page-stack">
             <div>
-              <h3>Answer</h3>
+              <h3>Respuesta</h3>
               <p className="answer-block">{mutation.data.answer}</p>
             </div>
  
             {Boolean(mutation.data.fastContext) && (
               <div>
-                <h3>Fast Context</h3>
-                <div className="panel muted-text" style={{ padding: '12px', fontSize: '0.9rem' }}>
+                <h3>Contexto rapido</h3>
+                <div className="panel muted-text">
                   {JSON.stringify(mutation.data.fastContext, null, 2)}
                 </div>
               </div>
@@ -139,8 +135,8 @@ export function QueryPage() {
  
             {Boolean(mutation.data.truthFacts) && (
               <div>
-                <h3>Truth Facts</h3>
-                <div className="panel" style={{ padding: '12px' }}>
+                <h3>Hechos base</h3>
+                <div className="panel compact-gap">
                   <ul className="source-list">
                     {Array.isArray(mutation.data.truthFacts) ? 
                       mutation.data.truthFacts.map((fact, i) => <li key={i}>{String(fact)}</li>) : 
@@ -152,26 +148,26 @@ export function QueryPage() {
             )}
  
             <div className="status-grid">
-              <div className="status-card">
-                <span>Model</span>
+              <div className="status-card" data-testid="query-metric-model">
+                <span>Modelo</span>
                 <strong>{mutation.data.model}</strong>
               </div>
-              <div className="status-card">
+              <div className="status-card" data-testid="query-metric-tokens">
                 <span>Tokens</span>
                 <strong>{mutation.data.tokensUsed}</strong>
               </div>
-              <div className="status-card">
-                <span>Sources</span>
+              <div className="status-card" data-testid="query-metric-sources">
+                <span>Fuentes</span>
                 <strong>{mutation.data.sourcesUsed.length}</strong>
               </div>
               <div className="status-card">
-                <span>Result</span>
+                <span>Resultado</span>
                 <StatusBadge status="READY" />
               </div>
             </div>
  
             <div>
-              <h3>Sources</h3>
+              <h3>Fuentes</h3>
               <ul className="source-list">
                 {mutation.data.sourcesUsed.map((source, index) => (
                   <li key={`${source.documentId || source.id || 'source'}-${index}`}>
@@ -184,21 +180,21 @@ export function QueryPage() {
         ) : null}
       </div>
  
-      <aside className="panel" style={{ padding: '20px' }}>
-        <h3>Chat History</h3>
+      <aside className="panel">
+        <h3>Historial</h3>
         {historyQuery.isLoading ? (
-          <p className="muted-text">Loading history...</p>
+          <p className="muted-text">Cargando historial...</p>
         ) : historyQuery.data ? (
           <div className="details-list">
             {historyQuery.data.messages.map((msg, i) => (
-              <div key={i} style={{ display: 'grid', gap: '4px', padding: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                <span className="eyebrow" style={{ fontSize: '0.7rem' }}>{msg.role}</span>
-                <p style={{ margin: 0, fontSize: '0.85rem' }}>{msg.content}</p>
+              <div key={i} className="query-history-entry">
+                <span className="eyebrow">{msg.role}</span>
+                <p>{msg.content}</p>
               </div>
             ))}
           </div>
         ) : (
-          <p className="muted-text">No history found for this session.</p>
+          <p className="muted-text">No hay historial para esta sesion.</p>
         )}
       </aside>
     </div>

@@ -6,8 +6,10 @@ import {
   Get,
   Headers,
   Inject,
+  NotFoundException,
   Param,
   Post,
+  Query,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -16,6 +18,7 @@ import { Throttle } from '@nestjs/throttler';
 import { IngestDocumentUseCase } from '../../ingestion/application/ingest-document.usecase';
 import { DeleteDocumentUseCase } from '../application/delete-document.usecase';
 import { GenerateDocumentUseCase } from '../application/generate-document.usecase';
+import { DocumentRecord } from '../domain/models/document.model';
 import { DocumentRepositoryPort } from '../domain/ports/document-repository.port';
 import { DOCUMENT_REPOSITORY, FILE_TEXT_EXTRACTOR_PORT } from '../../../shared/di.tokens';
 import { GenerateDocumentDto, IngestTextDocumentDto, UploadDocumentDto } from './documents.dto';
@@ -125,16 +128,62 @@ export class DocumentsController {
   async listDocuments(
     @Headers('x-tenant-id') tenantHeader?: string,
     @Headers('x-library-id') libraryHeader?: string,
+    @Query('page') pageQuery?: string,
+    @Query('pageSize') pageSizeQuery?: string,
+  ) {
+    const page = this.parsePositiveInteger(pageQuery, 1);
+    const pageSize = this.parsePositiveInteger(pageSizeQuery, 24, 200);
+    const offset = (page - 1) * pageSize;
+    const tenantId = this.resolveTenantId(tenantHeader);
+    const libraryId = this.resolveLibraryId(libraryHeader);
+    const total = await this.documentRepository.countDocuments(tenantId, libraryId);
+
+    let documents: DocumentRecord[] = [];
+    if (tenantId) {
+      documents = await this.documentRepository.listDocumentsByTenant(tenantId, pageSize, libraryId, offset);
+    } else if (libraryId) {
+      documents = await this.documentRepository.listDocumentsByLibrary(libraryId, undefined, pageSize, offset);
+    } else {
+      documents = await this.documentRepository.listDocuments(pageSize, libraryId, offset);
+    }
+
+    return {
+      items: documents.map((document) => this.toDocumentSummary(document)),
+      total,
+      page,
+      pageSize,
+      totalPages: total === 0 ? 0 : Math.ceil(total / pageSize),
+    };
+  }
+
+  @Get('scopes')
+  @Throttle({ default: {} })
+  @RequireApiKey()
+  async listDocumentScopes() {
+    return this.documentRepository.listDocumentScopes();
+  }
+
+  @Get(':id')
+  @Throttle({ default: {} })
+  @RequireApiKey()
+  async getDocument(
+    @Param('id') documentId: string,
+    @Headers('x-tenant-id') tenantHeader?: string,
+    @Headers('x-library-id') libraryHeader?: string,
   ) {
     const tenantId = this.resolveTenantId(tenantHeader);
     const libraryId = this.resolveLibraryId(libraryHeader);
-    if (tenantId) {
-      return this.documentRepository.listDocumentsByTenant(tenantId, 100, libraryId);
+    const document = await this.documentRepository.findDocumentById(documentId);
+    if (!document) {
+      throw new NotFoundException(`Document ${documentId} not found`);
     }
-    if (libraryId) {
-      return this.documentRepository.listDocumentsByLibrary(libraryId, undefined, 100);
+    if (tenantId && document.tenantId !== tenantId) {
+      throw new NotFoundException(`Document ${documentId} not found`);
     }
-    return this.documentRepository.listDocuments(100, libraryId);
+    if (libraryId && document.libraryId !== libraryId) {
+      throw new NotFoundException(`Document ${documentId} not found`);
+    }
+    return document;
   }
 
   @Delete(':id')
@@ -162,5 +211,28 @@ export class DocumentsController {
   private resolveLibraryId(rawLibraryId?: string): string | undefined {
     const libraryId = rawLibraryId?.trim();
     return libraryId && libraryId.length > 0 ? libraryId : undefined;
+  }
+
+  private toDocumentSummary(document: DocumentRecord): Omit<DocumentRecord, 'rawText'> & { previewText?: string } {
+    const { rawText, ...summary } = document;
+    const previewText = rawText?.replace(/\s+/g, ' ').trim().slice(0, 240);
+    return {
+      ...summary,
+      previewText: previewText && previewText.length > 0 ? previewText : undefined,
+    };
+  }
+
+  private parsePositiveInteger(rawValue: string | undefined, fallback: number, max?: number): number {
+    if (!rawValue) {
+      return fallback;
+    }
+    const parsedValue = Number.parseInt(rawValue, 10);
+    if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+      return fallback;
+    }
+    if (max && parsedValue > max) {
+      return max;
+    }
+    return parsedValue;
   }
 }

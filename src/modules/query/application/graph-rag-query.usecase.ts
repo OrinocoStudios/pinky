@@ -73,6 +73,7 @@ export class GraphRagQueryUseCase {
     if (input.sessionId) {
       this.chatHistory.saveMessage({
         sessionId: input.sessionId,
+        tenantId: input.tenantId,
         libraryId: input.libraryIds?.[0],
         role: 'user',
         content: input.query,
@@ -158,6 +159,7 @@ export class GraphRagQueryUseCase {
       if (input.sessionId) {
         this.chatHistory.saveMessage({
           sessionId: input.sessionId,
+          tenantId: input.tenantId,
           libraryId: input.libraryIds?.[0],
           role: 'assistant',
           content: result.answer,

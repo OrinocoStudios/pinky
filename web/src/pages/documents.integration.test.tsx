@@ -48,6 +48,18 @@ describe('DocumentsPage', () => {
             byStatus: { READY: documents.length },
             recent: documents,
           },
+          usage: {
+            documents: {
+              ingestedByDay: [{ date: '2026-05-01', count: documents.length }],
+              byLibrary: [],
+              bySource: [{ source: 'generated', count: documents.length }],
+            },
+            queries: {
+              total: 0,
+              byDay: [{ date: '2026-05-01', count: 0 }],
+              byLibrary: [],
+            },
+          },
         }),
       ),
       http.get('/documents/scopes', () =>
@@ -75,8 +87,8 @@ describe('DocumentsPage', () => {
     renderWithAppProviders(<DocumentsPage />);
 
     await screen.findByText('Doc 1');
-    fireEvent.click(screen.getByRole('button', { name: 'add manual' }));
-    await screen.findByRole('dialog', { name: 'Add manual' });
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo manual' }));
+    await screen.findByRole('dialog', { name: 'Nuevo manual' });
     fireEvent.change(screen.getByPlaceholderText('Titulo (opcional)'), { target: { value: 'Created from UI' } });
     fireEvent.change(screen.getByPlaceholderText('Contenido del documento'), { target: { value: 'Some raw text' } });
     fireEvent.change(screen.getByPlaceholderText('tenant-ejemplo'), { target: { value: 'tenant-a' } });
@@ -105,8 +117,8 @@ describe('DocumentsPage', () => {
     renderWithAppProviders(<DocumentsPage />);
 
     await screen.findByText('Doc 1');
-    fireEvent.click(screen.getByRole('button', { name: 'add manual' }));
-    await screen.findByRole('dialog', { name: 'Add manual' });
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo manual' }));
+    await screen.findByRole('dialog', { name: 'Nuevo manual' });
     fireEvent.change(screen.getByPlaceholderText('Titulo (opcional)'), { target: { value: 'Brand new scope' } });
     fireEvent.change(screen.getByPlaceholderText('Contenido del documento'), { target: { value: 'Raw content for new scope' } });
     fireEvent.change(screen.getByPlaceholderText('tenant-ejemplo'), { target: { value: 'tenant-new' } });
@@ -122,8 +134,8 @@ describe('DocumentsPage', () => {
     renderWithAppProviders(<DocumentsPage />);
 
     await screen.findByText('Doc 1');
-    fireEvent.click(screen.getByRole('button', { name: 'add manual' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Add manual' });
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo manual' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Nuevo manual' });
     expect(within(dialog).getByText('Puedes seleccionar una sugerencia o escribir un tenant/library nuevo.')).toBeInTheDocument();
     expect(document.querySelector('datalist#manual-tenant-suggestions option[value="tenant-a"]')).not.toBeNull();
     expect(document.querySelector('datalist#manual-library-suggestions option[value="lib-a"]')).not.toBeNull();
@@ -141,11 +153,11 @@ describe('DocumentsPage', () => {
 
     await screen.findByText('Doc 1');
     fireEvent.click(screen.getByText('Opciones avanzadas'));
-    const titleInputs = screen.getAllByPlaceholderText('Optional title');
+    const titleInputs = screen.getAllByPlaceholderText('Titulo opcional');
     fireEvent.change(titleInputs[1], { target: { value: 'Upload title' } });
     const file = new File(['hello'], 'hello.txt', { type: 'text/plain' });
-    fireEvent.change(screen.getByLabelText('File'), { target: { files: [file] } });
-    fireEvent.click(screen.getByRole('button', { name: 'Upload document' }));
+    fireEvent.change(screen.getByLabelText('Archivo'), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Subir documento' }));
 
     await screen.findByText('Upload title');
   });
@@ -164,8 +176,8 @@ describe('DocumentsPage', () => {
     await screen.findByText('Doc 1');
     fireEvent.click(screen.getByText('Opciones avanzadas'));
     fireEvent.change(screen.getByPlaceholderText('useCaseId'), { target: { value: 'sample' } });
-    fireEvent.change(screen.getAllByPlaceholderText('Optional title').at(-1)!, { target: { value: 'Generated UI' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Generate document' }));
+    fireEvent.change(screen.getAllByPlaceholderText('Titulo opcional').at(-1)!, { target: { value: 'Generated UI' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Generar documento' }));
 
     await screen.findByText('Generated UI');
   });

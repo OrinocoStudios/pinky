@@ -39,13 +39,15 @@ import { queryKeys } from '../app/query-keys';
  */
 export function DocumentsPage() {
   const queryClient = useQueryClient();
+  const pageSize = 24;
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [lastRefreshAt, setLastRefreshAt] = useState<Date | null>(null);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
   const [documentIdToDelete, setDocumentIdToDelete] = useState<string | null>(null);
   const [reindexConfirmMode, setReindexConfirmMode] = useState<'rebuild' | 'incremental' | null>(null);
-  const { data, isLoading, error, refetch, isFetching } = useDocuments();
+  const { data, isLoading, error, refetch, isFetching } = useDocuments(page, pageSize);
   const documentScopesQuery = useDocumentScopes();
   const activeDocument = useDocument(activeDocumentId);
   const ingestTextMutation = useIngestTextDocument();
@@ -53,29 +55,48 @@ export function DocumentsPage() {
   const generateDocumentMutation = useGenerateDocument();
   const deleteDocumentMutation = useDeleteDocument();
   const reindexMutation = useReindex();
+  const items = data?.items ?? [];
   const selectedDocument = activeDocumentId
-    ? (data ?? []).find((document) => document.documentId === activeDocumentId)
+    ? items.find((document) => document.documentId === activeDocumentId)
     : null;
 
   const filtered = useMemo(() => {
     const normalized = search.trim().toLowerCase();
     if (!normalized) {
-      return data ?? [];
+      return items;
     }
 
-    return (data ?? []).filter((document) => {
+    return items.filter((document) => {
       return [document.title, document.documentId, document.libraryId, document.tenantId, document.previewText]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalized));
     });
-  }, [data, search]);
+  }, [items, search]);
+
+  const hasActiveSearch = search.trim().length > 0;
+
+  const metrics = useMemo(() => {
+    const list = items;
+    const readyCount = list.filter((document) => String(document.status).toUpperCase() === 'READY').length;
+    const latestUpdate = list.length
+      ? list.reduce((latest, current) =>
+          new Date(current.updatedAt).getTime() > new Date(latest.updatedAt).getTime() ? current : latest,
+        )
+      : null;
+
+    return {
+      total: data?.total ?? list.length,
+      ready: readyCount,
+      updatedAt: latestUpdate ? new Date(latestUpdate.updatedAt).toLocaleString() : '-',
+    };
+  }, [data?.total, items]);
 
   if (isLoading) {
-    return <PageStateLoading message="Loading documents..." />;
+    return <PageStateLoading message="Cargando documentos..." />;
   }
 
   if (error) {
-    return <PageStateError title="Unable to load documents." />;
+    return <PageStateError title="No se pudo cargar documentos." />;
   }
 
   async function handleDeleteConfirm() {
@@ -103,6 +124,7 @@ export function DocumentsPage() {
   }
 
   async function handleRefresh() {
+    setPage(1);
     await queryClient.cancelQueries({ queryKey: queryKeys.documents.all() });
     queryClient.removeQueries({ queryKey: queryKeys.documents.all() });
     await refetch();
@@ -119,7 +141,7 @@ export function DocumentsPage() {
         </div>
         <div className="page-header-actions">
           <button className="primary-button" type="button" onClick={() => setIsManualModalOpen(true)}>
-            add manual
+            Nuevo manual
           </button>
           <button
             className="secondary-button"
@@ -137,6 +159,24 @@ export function DocumentsPage() {
           />
         </div>
       </div>
+
+      <section className="metrics-grid">
+        <article className="metric-card">
+          <span className="muted-text">Documentos</span>
+          <strong>{metrics.total}</strong>
+          <span className="muted-inline">Guardados</span>
+        </article>
+        <article className="metric-card">
+          <span className="muted-text">Listos</span>
+          <strong>{metrics.ready}</strong>
+          <span className="muted-inline">Para consultar</span>
+        </article>
+        <article className="metric-card">
+          <span className="muted-text">Ultima actualizacion</span>
+          <strong>{metrics.updatedAt}</strong>
+          <span className="muted-inline">Indice y metadata</span>
+        </article>
+      </section>
       {lastRefreshAt ? (
         <p className="muted-inline">Actualizado: {lastRefreshAt.toLocaleTimeString()}</p>
       ) : null}
@@ -157,6 +197,7 @@ export function DocumentsPage() {
                 </div>
 
                 <h3 className="document-card-title">{document.title || 'Documento sin titulo'}</h3>
+                <p className="muted-inline">Resumen</p>
                 <p className="document-card-preview">{getPreviewText(document)}</p>
 
                 <div className="cell-stack">
@@ -185,6 +226,32 @@ export function DocumentsPage() {
           </div>
         )}
       </article>
+
+      {hasActiveSearch ? (
+        <p className="muted-inline">Busqueda activa sobre pagina {page}. Limpia busqueda para paginar todo.</p>
+      ) : data ? (
+        <div className="documents-pagination">
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => setPage((currentPage) => Math.max(1, currentPage - 1))}
+            disabled={isFetching || page <= 1}
+          >
+            Anterior
+          </button>
+          <p className="muted-inline">
+            Pagina {data.totalPages === 0 ? 0 : page} de {data.totalPages} · Total {data.total}
+          </p>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => setPage((currentPage) => currentPage + 1)}
+            disabled={isFetching || page >= data.totalPages}
+          >
+            Siguiente
+          </button>
+        </div>
+      ) : null}
 
       <details className="panel advanced-panel">
         <summary className="advanced-summary">

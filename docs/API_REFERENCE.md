@@ -88,6 +88,70 @@ GET /health
 
 ---
 
+### GET /admin/overview 🔐
+
+Devuelve un snapshot operativo para el dashboard principal, incluyendo salud, resumen documental y analitica de uso.
+
+**Authentication**: Required
+
+**Request**:
+```
+GET /admin/overview
+X-API-Key: <key>
+```
+
+Headers de scope opcionales:
+- `X-Tenant-Id`
+- `X-Library-Id`
+
+**Response** (`200 OK`):
+```json
+{
+  "health": {
+    "status": "ok",
+    "uptime": 1642,
+    "services": {
+      "neo4j": { "status": "up", "latency_ms": 9 },
+      "llm": { "status": "configured", "provider": "openai" }
+    },
+    "latency_ms": 21
+  },
+  "documents": {
+    "total": 120,
+    "byStatus": { "READY": 115, "ERROR": 5 },
+    "recent": [
+      {
+        "documentId": "doc-1",
+        "title": "Q1 Notes",
+        "status": "READY",
+        "graphSyncStatus": "SYNCED",
+        "updatedAt": "2026-05-01T18:50:15.000Z",
+        "libraryId": "project:pinky"
+      }
+    ]
+  },
+  "usage": {
+    "documents": {
+      "ingestedByDay": [{ "date": "2026-05-01", "count": 8 }],
+      "byLibrary": [{ "libraryId": "project:pinky", "count": 54 }],
+      "bySource": [{ "source": "generated", "count": 70 }]
+    },
+    "queries": {
+      "total": 340,
+      "byDay": [{ "date": "2026-05-01", "count": 24 }],
+      "byLibrary": [{ "libraryId": "project:pinky", "count": 140 }]
+    }
+  }
+}
+```
+
+Notas:
+- `usage.documents.ingestedByDay` y `usage.queries.byDay` cubren una ventana fija de 14 dias.
+- `usage.documents.byLibrary` y `usage.queries.byLibrary` devuelven top 5 libraries por volumen.
+- Las consultas se cuentan desde mensajes de chat persistidos con `role = "user"`.
+
+---
+
 ### POST /documents/text 🔐
 
 Ingests a plain text document. The service will chunk the text, generate embeddings, extract entities/relationships into the knowledge graph, and store everything.
