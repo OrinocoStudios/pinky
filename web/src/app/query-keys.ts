@@ -8,6 +8,8 @@ export const queryKeys = {
   },
   documents: {
     all: () => ['documents'] as const,
+    byId: (documentId: string) => ['documents', documentId] as const,
+    scopes: () => ['documents', 'scopes'] as const,
   },
   health: {
     current: () => ['health'] as const,

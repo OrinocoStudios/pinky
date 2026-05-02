@@ -23,6 +23,7 @@ export interface DocumentRepositoryPort {
     tenantId?: string,
     limit?: number,
   ): Promise<DocumentRecord[]>;
+  listDocumentScopes(): Promise<{ tenants: string[]; libraries: string[] }>;
   findDocumentById(documentId: string): Promise<DocumentRecord | null>;
   findDocumentByChecksum(
     checksum: string,

@@ -16,11 +16,29 @@ export type AuthMeResponse = {
   user: AuthUser;
 };
 
+export type DocumentSource =
+  | {
+      kind: 'upload';
+      filename: string;
+      mimeType: string;
+    }
+  | {
+      kind: 'url';
+      url: string;
+    }
+  | {
+      kind: 'generated';
+      useCaseId: string;
+    };
+
 export type DocumentRecord = {
   documentId: string;
   title?: string;
   status: string;
   graphSyncStatus: string;
+  previewText?: string;
+  rawText?: string;
+  source?: DocumentSource;
   createdAt: string;
   updatedAt: string;
   tenantId?: string;
@@ -95,6 +113,13 @@ export type IngestTextDocumentPayload = {
   title?: string;
   rawText: string;
   metadata?: Record<string, unknown>;
+  tenantId?: string;
+  libraryId?: string;
+};
+
+export type DocumentScopesResponse = {
+  tenants: string[];
+  libraries: string[];
 };
 
 export type GenerateDocumentPayload = {

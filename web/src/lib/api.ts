@@ -18,9 +18,13 @@ type ApiErrorPayload = {
 };
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const cache = init?.cache ?? (method === 'GET' || method === 'HEAD' ? 'no-store' : undefined);
+
   const response = await fetch(`${apiBaseUrl}${path}`, {
     credentials: 'include',
     headers: buildApiHeaders(init?.headers),
+    cache,
     ...init,
   });
 

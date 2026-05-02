@@ -133,6 +133,82 @@ describe('Documents (e2e)', () => {
       expect(res.body).toHaveLength(2);
       expect(res.body[0].title).toBeDefined();
       expect(res.body[1].title).toBeDefined();
+      expect(res.body[0].rawText).toBeUndefined();
+      expect(res.body[0].previewText).toBeDefined();
+    });
+  });
+
+  describe('GET /documents/scopes', () => {
+    it('should return unique tenant and library suggestions', async () => {
+      await request(app.getHttpServer())
+        .post('/documents/text')
+        .set('X-Tenant-Id', 'tenant-a')
+        .set('X-Library-Id', 'lib-a')
+        .send({ title: 'Scoped A', rawText: 'Content A for scope suggestions.' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post('/documents/text')
+        .set('X-Tenant-Id', 'tenant-a')
+        .set('X-Library-Id', 'lib-b')
+        .send({ title: 'Scoped B', rawText: 'Content B for scope suggestions.' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post('/documents/text')
+        .set('X-Tenant-Id', 'tenant-b')
+        .set('X-Library-Id', 'lib-b')
+        .send({ title: 'Scoped C', rawText: 'Content C for scope suggestions.' })
+        .expect(201);
+
+      const res = await request(app.getHttpServer())
+        .get('/documents/scopes')
+        .expect(200);
+
+      expect(res.body).toEqual({
+        tenants: ['tenant-a', 'tenant-b'],
+        libraries: ['lib-a', 'lib-b'],
+      });
+    });
+  });
+
+  // ── GET /documents/:id ────────────────────────────────────────
+
+  describe('GET /documents/:id', () => {
+    it('should return full document detail including rawText', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/documents/text')
+        .set('X-Library-Id', 'lib-a')
+        .send({ title: 'Detail Doc', rawText: 'Detail content body for document reader.' })
+        .expect(201);
+
+      const res = await request(app.getHttpServer())
+        .get(`/documents/${created.body.documentId}`)
+        .set('X-Library-Id', 'lib-a')
+        .expect(200);
+
+      expect(res.body.documentId).toBe(created.body.documentId);
+      expect(res.body.rawText).toContain('Detail content body');
+      expect(res.body.previewText).toBeUndefined();
+    });
+
+    it('should return 404 when document does not exist', async () => {
+      await request(app.getHttpServer())
+        .get('/documents/non-existent-id')
+        .expect(404);
+    });
+
+    it('should return 404 when scope does not match document library', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/documents/text')
+        .set('X-Library-Id', 'lib-a')
+        .send({ title: 'Scoped Doc', rawText: 'This belongs to library A.' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .get(`/documents/${created.body.documentId}`)
+        .set('X-Library-Id', 'lib-b')
+        .expect(404);
     });
   });
 

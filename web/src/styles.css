@@ -39,6 +39,7 @@ textarea {
   display: grid;
   grid-template-columns: 280px 1fr;
   min-height: 100vh;
+  height: 100vh;
 }
 
 .sidebar {
@@ -49,6 +50,11 @@ textarea {
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(3, 8, 15, 0.65);
   backdrop-filter: blur(18px);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  height: 100vh;
+  overflow-y: auto;
 }
 
 .sidebar-title,
@@ -59,6 +65,7 @@ textarea {
 
 .content {
   padding: 32px;
+  overflow-y: auto;
 }
 
 .eyebrow {
@@ -170,6 +177,12 @@ textarea {
   gap: 16px;
 }
 
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .stats-grid,
 .panel-grid,
 .status-grid {
@@ -231,6 +244,129 @@ textarea {
 
 .table-wrapper {
   overflow-x: auto;
+}
+
+.documents-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.document-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.document-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.document-card-title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.document-card-preview {
+  margin: 0;
+  color: #d2deee;
+  line-height: 1.6;
+}
+
+.document-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.advanced-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.advanced-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.maintenance-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.maintenance-title {
+  margin: 0;
+}
+
+.maintenance-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.docs-selector-panel {
+  padding-bottom: 12px;
+}
+
+.docs-selector-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.docs-content-panel {
+  max-width: 980px;
+}
+
+.docs-content-title {
+  margin: 0;
+}
+
+.docs-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 14px;
+}
+
+.docs-step-item {
+  display: grid;
+  gap: 6px;
+}
+
+.docs-step-title {
+  margin: 0;
+}
+
+.docs-step-description {
+  margin: 0;
+  color: #d2deee;
+}
+
+.docs-references-title {
+  margin: 0;
+}
+
+.docs-references-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.docs-references-list a {
+  color: #8fd6ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 table {
@@ -408,6 +544,7 @@ th {
   padding: 24px;
   background: rgba(4, 8, 15, 0.72);
   backdrop-filter: blur(8px);
+  z-index: 10;
 }
 
 .dialog-card {
@@ -416,6 +553,61 @@ th {
   border-radius: 20px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(8, 15, 26, 0.94);
+}
+
+.reader-dialog {
+  width: min(900px, 100%);
+  max-height: 84vh;
+  overflow: auto;
+}
+
+.manual-dialog {
+  width: min(760px, 100%);
+  max-height: 84vh;
+  overflow: auto;
+}
+
+.manual-scope-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.reader-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.reader-content {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.reader-text {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+.reader-warning {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(248, 113, 113, 0.1);
+}
+
+.reader-details {
+  margin: 10px 0 0;
 }
 
 .dialog-title {
@@ -431,12 +623,17 @@ th {
 @media (max-width: 1024px) {
   .app-layout {
     grid-template-columns: 1fr;
+    height: auto;
   }
 
   .sidebar {
     gap: 24px;
     border-right: none;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    position: static;
+    top: auto;
+    height: auto;
+    overflow: visible;
   }
 
   .stats-grid,
@@ -458,6 +655,10 @@ th {
 
   .stats-grid,
   .panel-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .manual-scope-grid {
     grid-template-columns: 1fr;
   }
 }

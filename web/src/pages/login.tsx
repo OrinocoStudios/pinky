@@ -1,9 +1,10 @@
 import { FormEvent, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { getProviderLoginUrl } from '../lib/auth';
 import { useAuthProviders, useCurrentUser, useDevLogin } from '../hooks/use-auth';
 
 export function LoginPage() {
+  const navigate = useNavigate();
   const [devEmail, setDevEmail] = useState('');
   const [devError, setDevError] = useState<string | null>(null);
   const query = useCurrentUser();
@@ -23,6 +24,7 @@ export function LoginPage() {
 
     try {
       await devLoginMutation.mutateAsync({ email: devEmail });
+      navigate('/', { replace: true });
     } catch (error) {
       setDevError(error instanceof Error ? error.message : 'Dev login failed');
     }

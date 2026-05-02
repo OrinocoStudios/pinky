@@ -27,10 +27,13 @@ export function useIngestTextDocument() {
   const invalidate = useInvalidateDocumentQueries();
 
   return useMutation({
-    mutationFn: (payload: IngestTextDocumentPayload) =>
+    mutationFn: ({ tenantId, libraryId, ...payload }: IngestTextDocumentPayload) =>
       apiFetch<DocumentRecord>('/documents/text', {
         method: 'POST',
-        headers: getScopeHeaders(scope),
+        headers: getScopeHeaders({
+          tenantId: tenantId ?? scope.tenantId,
+          libraryId: libraryId ?? scope.libraryId,
+        }),
         body: JSON.stringify(payload),
       }),
     onSuccess: invalidate,

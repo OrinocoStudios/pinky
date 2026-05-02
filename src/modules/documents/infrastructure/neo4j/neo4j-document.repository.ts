@@ -218,6 +218,36 @@ export class Neo4jDocumentRepository implements DocumentRepositoryPort, OnModule
     return this.listDocumentsByScope(limit, tenantId, libraryId);
   }
 
+  async listDocumentScopes(): Promise<{ tenants: string[]; libraries: string[] }> {
+    const session = this.neo4j.getSession();
+    try {
+      const result = await session.run(
+        `
+        MATCH (d:Document)
+        WITH collect(DISTINCT d.tenantId) AS tenantValues, collect(DISTINCT d.libraryId) AS libraryValues
+        RETURN
+          [tenant IN tenantValues WHERE tenant IS NOT NULL AND trim(tenant) <> ''] AS tenants,
+          [library IN libraryValues WHERE library IS NOT NULL AND trim(library) <> ''] AS libraries
+        `,
+      );
+      const record = result.records[0];
+      const tenantValues = record?.get('tenants');
+      const libraryValues = record?.get('libraries');
+      const tenants: string[] = Array.isArray(tenantValues)
+        ? tenantValues.map((value: unknown) => String(value))
+        : [];
+      const libraries: string[] = Array.isArray(libraryValues)
+        ? libraryValues.map((value: unknown) => String(value))
+        : [];
+      return {
+        tenants: [...new Set(tenants)].sort((a, b) => a.localeCompare(b)),
+        libraries: [...new Set(libraries)].sort((a, b) => a.localeCompare(b)),
+      };
+    } finally {
+      await session.close();
+    }
+  }
+
   async findDocumentById(documentId: string): Promise<DocumentRecord | null> {
     const session = this.neo4j.getSession();
     try {

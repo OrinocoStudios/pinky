@@ -6,6 +6,7 @@ import { ScopeSelector } from './scope-selector';
 const navigation = [
   { to: '/', label: 'Dashboard' },
   { to: '/documents', label: 'Documents' },
+  { to: '/documentation', label: 'Documentation' },
   { to: '/resources', label: 'Resources' },
   { to: '/query', label: 'Query' },
 ];
@@ -26,7 +27,7 @@ function AppShellContent() {
 
   async function handleLogout() {
     await logoutMutation.mutateAsync();
-    navigate('/login');
+    navigate('/login', { replace: true });
   }
 
   return (

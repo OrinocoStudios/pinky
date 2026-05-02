@@ -13,6 +13,7 @@ function createMockDocuments() {
       title: 'Test Document 1',
       status: 'ingested',
       graphSyncStatus: 'synced',
+      previewText: 'Texto de ejemplo 1',
       createdAt: now,
       updatedAt: now,
       tenantId: 'tenant_1',
@@ -23,6 +24,7 @@ function createMockDocuments() {
       title: 'Test Document 2',
       status: 'ingested',
       graphSyncStatus: 'synced',
+      previewText: 'Texto de ejemplo 2',
       createdAt: now,
       updatedAt: now,
       tenantId: 'tenant_1',
@@ -53,9 +55,9 @@ describe('DocumentsPage Deletion Flow', () => {
 
     await waitFor(() => expect(screen.queryByText(/loading/i)).not.toBeInTheDocument(), { timeout: 5000 });
 
-    const deleteButton = screen.getAllByRole('button', { name: /^delete$/i })[0];
+    const deleteButton = screen.getAllByRole('button', { name: /^eliminar$/i })[0];
     fireEvent.click(deleteButton);
-    expect(screen.getByRole('dialog', { name: /delete document/i })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: /eliminar documento/i })).toBeInTheDocument();
   });
 
   it('cancels deletion when cancel is clicked', async () => {
@@ -63,14 +65,14 @@ describe('DocumentsPage Deletion Flow', () => {
 
     await waitFor(() => expect(screen.queryByText(/loading/i)).not.toBeInTheDocument(), { timeout: 5000 });
 
-    const deleteButton = screen.getAllByRole('button', { name: /^delete$/i })[0];
+    const deleteButton = screen.getAllByRole('button', { name: /^eliminar$/i })[0];
     fireEvent.click(deleteButton);
 
     const cancelButton = screen.getByRole('button', { name: /cancel/i });
     fireEvent.click(cancelButton);
 
     await waitFor(() => {
-      expect(screen.queryByText(/delete document/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/eliminar documento/i)).not.toBeInTheDocument();
     });
   });
 
@@ -79,10 +81,10 @@ describe('DocumentsPage Deletion Flow', () => {
 
     await waitFor(() => expect(screen.queryByText(/loading/i)).not.toBeInTheDocument(), { timeout: 5000 });
 
-    const deleteButton = screen.getAllByRole('button', { name: /^delete$/i })[0];
+    const deleteButton = screen.getAllByRole('button', { name: /^eliminar$/i })[0];
     fireEvent.click(deleteButton);
 
-    const confirmButton = screen.getByRole('button', { name: /delete document/i });
+    const confirmButton = screen.getByRole('button', { name: /eliminar documento/i });
     fireEvent.click(confirmButton);
 
     await waitFor(

@@ -149,6 +149,19 @@ export class InMemoryDocumentRepository implements DocumentRepositoryPort {
       .slice(0, limit);
   }
 
+  async listDocumentScopes(): Promise<{ tenants: string[]; libraries: string[] }> {
+    const tenants = this.documents
+      .map((document) => document.tenantId?.trim())
+      .filter((value): value is string => Boolean(value));
+    const libraries = this.documents
+      .map((document) => document.libraryId?.trim())
+      .filter((value): value is string => Boolean(value));
+    return {
+      tenants: [...new Set(tenants)].sort((a, b) => a.localeCompare(b)),
+      libraries: [...new Set(libraries)].sort((a, b) => a.localeCompare(b)),
+    };
+  }
+
   async findDocumentById(documentId: string): Promise<DocumentRecord | null> {
     return this.documents.find((d) => d.documentId === documentId) ?? null;
   }
