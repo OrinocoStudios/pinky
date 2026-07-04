@@ -14,7 +14,7 @@ export class Neo4jChunkSearchAdapter implements ChunkSearchPort {
   ) {}
 
   async hybridSearch(query: ChunkSearchQuery): Promise<DocumentChunk[]> {
-    const queryVector = await this.embeddingPort.embed(query.queryText);
+    const queryVector = await this.embeddingPort.embed(query.queryText, 'query');
 
     const session = this.neo4j.getSession();
     try {

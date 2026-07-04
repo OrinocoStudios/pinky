@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { EmbeddingPort } from '../../domain/ports/embedding.port';
+import { EmbeddingPort, EmbeddingTask } from '../../domain/ports/embedding.port';
 import { BrainConfig } from '../../../../config/configuration';
+import { applyTaskPrefix } from '../embedding-prefix.util';
 
 type OllamaEmbedResponse = {
   embeddings: number[][];
@@ -23,7 +24,7 @@ export class OllamaEmbeddingAdapter implements EmbeddingPort {
     this.timeoutMs = ollama?.timeoutMs ?? 30000;
   }
 
-  async embed(text: string): Promise<number[]> {
+  async embed(text: string, task: EmbeddingTask = 'document'): Promise<number[]> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
 
@@ -40,7 +41,10 @@ export class OllamaEmbeddingAdapter implements EmbeddingPort {
       const res = await fetch(`${this.baseUrl}/api/embed`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ model: this.model, input: text }),
+        body: JSON.stringify({
+          model: this.model,
+          input: applyTaskPrefix(this.model, text, task),
+        }),
         signal: controller.signal,
       });
 
@@ -57,9 +61,6 @@ export class OllamaEmbeddingAdapter implements EmbeddingPort {
       }
 
       return this.normalize(vector);
-    } catch (err) {
-      console.warn(`[OllamaEmbedding] Fallback to mock vector due to error: ${err instanceof Error ? err.message : 'Unknown'}`);
-      return new Array(768).fill(0).map(() => Math.random());
     } finally {
       clearTimeout(timeoutId);
     }

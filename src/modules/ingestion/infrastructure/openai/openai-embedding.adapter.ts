@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { EmbeddingPort } from '../../domain/ports/embedding.port';
+import { EmbeddingPort, EmbeddingTask } from '../../domain/ports/embedding.port';
 import { BrainConfig } from '../../../../config/configuration';
 import { createOpenAiClient } from '../../../../common/utils/openai-client';
+import { applyTaskPrefix } from '../embedding-prefix.util';
 
 @Injectable()
 export class OpenAiEmbeddingAdapter implements EmbeddingPort {
@@ -19,31 +20,24 @@ export class OpenAiEmbeddingAdapter implements EmbeddingPort {
       }) ?? 'nomic-embed-text';
   }
 
-  async embed(text: string): Promise<number[]> {
+  async embed(text: string, task: EmbeddingTask = 'document'): Promise<number[]> {
     if (!this.client) {
       throw new Error(
         'OPENAI_API_KEY is required for OpenAI-compatible embeddings unless OPENAI_BASE_URL points to a compatible gateway',
       );
     }
 
-    try {
-      const response = await this.client.embeddings.create({
-        model: this.model,
-        input: text,
-      });
-      const vector = response.data[0]?.embedding;
+    const response = await this.client.embeddings.create({
+      model: this.model,
+      input: applyTaskPrefix(this.model, text, task),
+    });
+    const vector = response.data[0]?.embedding;
 
-      if (!Array.isArray(vector) || vector.length === 0) {
-        throw new Error('OpenAI-compatible endpoint returned empty embedding');
-      }
-
-      return this.normalize(vector);
-    } catch (error) {
-      this.logger.warn(
-        `Falling back to mock embedding due to error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
-      return new Array(768).fill(0).map(() => Math.random());
+    if (!Array.isArray(vector) || vector.length === 0) {
+      throw new Error('OpenAI-compatible endpoint returned empty embedding');
     }
+
+    return this.normalize(vector);
   }
 
   getModelId(): string {
