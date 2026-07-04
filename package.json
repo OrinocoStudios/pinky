@@ -7,14 +7,14 @@
   "scripts": {
     "build": "nest build",
     "build:web": "npm --prefix web run build",
-    "start": "node dist/main.js",
+    "start": "node dist/src/main.js",
     "start:dev": "nest start --watch",
     "start:web": "npm --prefix web run dev",
     "lint": "eslint \"src/**/*.ts\"",
     "test": "jest --config jest.config.ts",
     "test:e2e": "jest --config jest-e2e.config.ts",
     "test:ci": "jest --config jest-e2e.config.ts --ci --forceExit",
-    "reindex": "node dist/scripts/reindex-chunks.js"
+    "reindex": "node dist/src/scripts/reindex-chunks.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.0",

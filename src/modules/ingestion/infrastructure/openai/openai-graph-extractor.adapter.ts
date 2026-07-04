@@ -133,6 +133,9 @@ Rules: Use entity names exactly as they appear. Relationship "from" and "to" mus
 
     let response: any = null;
     try {
+      // La extracción es tarea estructurada: el thinking del modelo (llama.cpp
+      // --reasoning on) solo quema tokens y triplica la latencia de ingesta.
+      // Se desactiva per-request; el resto de usos del gateway lo conserva.
       response = await this.client.chat.completions.create({
         model: this.model,
         messages: [
@@ -143,7 +146,8 @@ Rules: Use entity names exactly as they appear. Relationship "from" and "to" mus
         ],
         temperature: this.temperature,
         max_tokens: this.maxTokens,
-      });
+        chat_template_kwargs: { enable_thinking: false },
+      } as Parameters<typeof this.client.chat.completions.create>[0]);
 
       const raw = response.choices[0]?.message?.content?.trim() ?? '';
       const parsed = JSON.parse(this.extractJson(raw)) as ChunkExtraction;
