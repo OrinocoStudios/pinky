@@ -10,14 +10,17 @@ Este registro resume cambios de implementación para mantener contexto operativo
 
 - Agregados de uso en backend para dashboard: ingesta de documentos por dia, top libraries por documentos, distribucion por origen y consultas persistidas por dia/library.
 - Campo `usage` en `GET /admin/overview` con series de 14 dias y top 5 libraries.
+- Conteo de consultas por documento recuperado (deduplicado por query/documento) y nuevo agregado `usage.documents.byQueryCount` (top 10).
 - Persistencia de `tenantId` en `ChatMessage` para mejorar scoping de analitica futura.
-- Seccion visual de graficas en dashboard web usando `recharts`.
+- Seccion visual de graficas en dashboard web usando `recharts`, incluyendo gráfico adicional de top documentos por consultas.
 
 ### Changed
 
 - `GraphRagQueryUseCase` ahora guarda `tenantId` junto con `sessionId`/`libraryId` al persistir mensajes de chat.
 - Contratos frontend (`OverviewResponse`) y mocks de tests actualizados para el nuevo bloque `usage`.
 - Documentacion API ampliada con el contrato de `GET /admin/overview`.
+- El limite global por defecto sube de 10 a 60 req/min para evitar `429` durante navegacion normal del frontend; los perfiles `query`, `upload` e `ingest` mantienen sus limites especificos.
+- Los perfiles de `@nestjs/throttler` quedan aislados por tipo de endpoint para que lecturas/auth/admin no consuman cuota de `query`, y el MCP no quede bloqueado por throttles ajenos al sincronizar documentos.
 
 ---
 

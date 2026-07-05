@@ -81,6 +81,7 @@ export type OverviewResponse = {
       ingestedByDay: Array<{ date: string; count: number }>;
       byLibrary: Array<{ libraryId: string; count: number }>;
       bySource: Array<{ source: string; count: number }>;
+      byQueryCount: Array<{ documentId: string; title?: string; count: number }>;
     };
     queries: {
       total: number;

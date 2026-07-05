@@ -19,6 +19,7 @@ import {
   FILE_TEXT_EXTRACTOR_PORT,
   GRAPH_EXTRACTOR_PORT,
   GRAPH_STORE_PORT,
+  QUERY_DOCUMENT_ANALYTICS_REPOSITORY,
 } from './shared/di.tokens';
 import { Neo4jConnectionService } from './modules/graph/infrastructure/neo4j/neo4j-connection.service';
 import { Neo4jGraphStoreAdapter } from './modules/graph/infrastructure/neo4j/neo4j-graph-store.adapter';
@@ -55,6 +56,7 @@ import { FileUploadInterceptor } from './common/interceptors/file-upload.interce
 import { ChecksumService } from './common/utils/checksum.service';
 import { StructuredLogger } from './common/logger/structured-logger.service';
 import { Neo4jChatHistoryRepository } from './modules/query/infrastructure/neo4j/neo4j-chat-history.repository';
+import { Neo4jQueryDocumentAnalyticsRepository } from './modules/query/infrastructure/neo4j/neo4j-query-document-analytics.repository';
 import { AuthModule } from './modules/auth/auth.module';
 import { AdminController } from './modules/admin/presentation/admin.controller';
 
@@ -72,7 +74,7 @@ import { AdminController } from './modules/admin/presentation/admin.controller';
       inject: [ConfigService],
       useFactory: (configService: ConfigService<BrainConfig>) => {
         const ttl = configService.get<number>('app.rateLimitTtl', { infer: true }) ?? 60000;
-        const globalLimit = configService.get<number>('app.rateLimitGlobal', { infer: true }) ?? 10;
+        const globalLimit = configService.get<number>('app.rateLimitGlobal', { infer: true }) ?? 60;
         const queryLimit = configService.get<number>('app.rateLimitQuery', { infer: true }) ?? 5;
         const uploadLimit = configService.get<number>('app.rateLimitUpload', { infer: true }) ?? 3;
         const ingestLimit = configService.get<number>('app.rateLimitIngest', { infer: true }) ?? 5;
@@ -144,6 +146,7 @@ import { AdminController } from './modules/admin/presentation/admin.controller';
     Neo4jDocumentRepository,
     Neo4jChunkSearchAdapter,
     Neo4jChatHistoryRepository,
+    Neo4jQueryDocumentAnalyticsRepository,
     DefaultFileTextExtractorAdapter,
     TemplateDocumentGeneratorAdapter,
     LocalAnswerGeneratorAdapter,
@@ -159,6 +162,10 @@ import { AdminController } from './modules/admin/presentation/admin.controller';
     {
       provide: CHAT_HISTORY_REPOSITORY,
       useExisting: Neo4jChatHistoryRepository,
+    },
+    {
+      provide: QUERY_DOCUMENT_ANALYTICS_REPOSITORY,
+      useExisting: Neo4jQueryDocumentAnalyticsRepository,
     },
     {
       provide: APP_GUARD,

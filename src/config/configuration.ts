@@ -177,7 +177,7 @@ export default (): BrainConfig => {
       chunkSize: Number(process.env.CHUNK_SIZE ?? 1200),
       chunkOverlap: Number(process.env.CHUNK_OVERLAP ?? 200),
       rateLimitTtl: Number(process.env.RATE_LIMIT_TTL ?? 60000),
-      rateLimitGlobal: Number(process.env.RATE_LIMIT_GLOBAL ?? 10),
+      rateLimitGlobal: Number(process.env.RATE_LIMIT_GLOBAL ?? 60),
       rateLimitQuery: Number(process.env.RATE_LIMIT_QUERY ?? 5),
       rateLimitUpload: Number(process.env.RATE_LIMIT_UPLOAD ?? 3),
       rateLimitIngest: Number(process.env.RATE_LIMIT_INGEST ?? 5),

@@ -45,6 +45,18 @@ describe('Rate limiting (e2e)', () => {
     expect(third.status).toBe(429);
   });
 
+  it('does not apply named throttles to document reads', async () => {
+    const sendRequest = () => request(app.getHttpServer()).get('/documents');
+
+    const responses = [];
+    for (let index = 0; index < 5; index += 1) {
+      responses.push(await sendRequest());
+    }
+
+    expect(responses.map((response) => response.status)).toEqual([200, 200, 200, 200, 200]);
+    expect((await sendRequest()).status).toBe(429);
+  });
+
   it('returns 429 after exceeding the upload throttle limit on POST /documents/upload', async () => {
     const sendUpload = (n: number) =>
       request(app.getHttpServer())

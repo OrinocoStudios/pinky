@@ -134,7 +134,10 @@ Headers de scope opcionales:
     "documents": {
       "ingestedByDay": [{ "date": "2026-05-01", "count": 8 }],
       "byLibrary": [{ "libraryId": "project:pinky", "count": 54 }],
-      "bySource": [{ "source": "generated", "count": 70 }]
+      "bySource": [{ "source": "generated", "count": 70 }],
+      "byQueryCount": [
+        { "documentId": "doc-1", "title": "Q1 Notes", "count": 33 }
+      ]
     },
     "queries": {
       "total": 340,
@@ -148,6 +151,7 @@ Headers de scope opcionales:
 Notas:
 - `usage.documents.ingestedByDay` y `usage.queries.byDay` cubren una ventana fija de 14 dias.
 - `usage.documents.byLibrary` y `usage.queries.byLibrary` devuelven top 5 libraries por volumen.
+- `usage.documents.byQueryCount` devuelve top 10 documentos por consultas (documentos recuperados por query, deduplicados por query/documento).
 - Las consultas se cuentan desde mensajes de chat persistidos con `role = "user"`.
 
 ---

@@ -53,6 +53,7 @@ describe('DocumentsPage', () => {
               ingestedByDay: [{ date: '2026-05-01', count: documents.length }],
               byLibrary: [],
               bySource: [{ source: 'generated', count: documents.length }],
+              byQueryCount: [],
             },
             queries: {
               total: 0,

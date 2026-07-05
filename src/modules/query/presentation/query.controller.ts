@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Headers, Inject, Logger, Param, Post } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
 import { GraphRagQueryUseCase } from '../application/graph-rag-query.usecase';
 import { SummarizeUseCase } from '../application/summarize.usecase';
@@ -23,6 +23,7 @@ export class QueryController {
   ) {}
 
   @Post('query')
+  @SkipThrottle({ default: true, upload: true, ingest: true })
   @Throttle({ query: {} })
   @RequireApiKey()
   async query(
@@ -59,6 +60,7 @@ export class QueryController {
   }
 
   @Post('summarize')
+  @SkipThrottle({ query: true, upload: true, ingest: true })
   @RequireApiKey()
   async summarize(
     @Body() body: SummarizeDto,
@@ -78,6 +80,7 @@ export class QueryController {
   }
 
   @Get('query/history/:sessionId')
+  @SkipThrottle({ query: true, upload: true, ingest: true })
   @RequireApiKey()
   async getChatHistory(
     @Param('sessionId') sessionId: string,

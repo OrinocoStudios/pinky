@@ -9,6 +9,7 @@ import {
   CHUNK_SEARCH_PORT,
   DOCUMENT_REPOSITORY,
   GRAPH_STORE_PORT,
+  QUERY_DOCUMENT_ANALYTICS_REPOSITORY,
 } from '../../../shared/di.tokens';
 
 describe('GraphRagQueryUseCase', () => {
@@ -18,6 +19,7 @@ describe('GraphRagQueryUseCase', () => {
   let graphStore: Record<string, jest.Mock>;
   let answerGenerator: Record<string, jest.Mock>;
   let chatHistory: Record<string, jest.Mock>;
+  let queryDocumentAnalytics: Record<string, jest.Mock>;
 
   beforeEach(async () => {
     chunkSearch = {
@@ -66,6 +68,10 @@ describe('GraphRagQueryUseCase', () => {
       getBySessionId: jest.fn().mockResolvedValue([]),
       clearSession: jest.fn().mockResolvedValue(undefined),
     };
+    queryDocumentAnalytics = {
+      saveRetrievedDocuments: jest.fn().mockResolvedValue(undefined),
+      getTopDocumentsByQueryCount: jest.fn().mockResolvedValue([]),
+    };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -80,6 +86,7 @@ describe('GraphRagQueryUseCase', () => {
         { provide: GRAPH_STORE_PORT, useValue: graphStore },
         { provide: ANSWER_GENERATOR_PORT, useValue: answerGenerator },
         { provide: CHAT_HISTORY_REPOSITORY, useValue: chatHistory },
+        { provide: QUERY_DOCUMENT_ANALYTICS_REPOSITORY, useValue: queryDocumentAnalytics },
         makeCounterProvider({ name: 'brain_queries_total', help: 'test' }),
         makeCounterProvider({ name: 'brain_query_errors_total', help: 'test' }),
         makeHistogramProvider({ name: 'brain_query_latency_ms', help: 'test', buckets: [100] }),
@@ -193,5 +200,31 @@ describe('GraphRagQueryUseCase', () => {
         libraryId: 'lib-1',
       }),
     );
+  });
+
+  it('should persist deduplicated retrieved documents for analytics', async () => {
+    chunkSearch.hybridSearch.mockResolvedValue([
+      { chunkId: 'c1', documentId: 'd1', seq: 0, text: 'A', createdAt: '' },
+      { chunkId: 'c2', documentId: 'd1', seq: 1, text: 'B', createdAt: '' },
+      { chunkId: 'c3', documentId: 'd2', seq: 2, text: 'C', createdAt: '' },
+    ]);
+    documentRepository.findDocumentById
+      .mockResolvedValueOnce({ documentId: 'd1', title: 'Doc A', metadata: {}, libraryId: 'lib-1' })
+      .mockResolvedValueOnce({ documentId: 'd2', title: 'Doc B', metadata: {}, libraryId: 'lib-1' });
+
+    await useCase.execute({ query: 'dedup test', topK: 5, tenantId: 'tenant-a', libraryIds: ['lib-1'] });
+
+    expect(queryDocumentAnalytics.saveRetrievedDocuments).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: 'tenant-a',
+        libraryId: 'lib-1',
+        documents: expect.arrayContaining([
+          expect.objectContaining({ documentId: 'd1' }),
+          expect.objectContaining({ documentId: 'd2' }),
+        ]),
+      }),
+    );
+    const callDocuments = queryDocumentAnalytics.saveRetrievedDocuments.mock.calls[0][0].documents;
+    expect(callDocuments).toHaveLength(2);
   });
 });

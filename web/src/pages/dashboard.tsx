@@ -41,6 +41,8 @@ export function DashboardPage() {
         </article>
       </section>
 
+      <UsageCharts usage={data.usage} />
+
       <section className="panel-grid">
         <article className="panel">
           <h3>Estado por tipo</h3>
@@ -76,8 +78,6 @@ export function DashboardPage() {
           </dl>
         </article>
       </section>
-
-      <UsageCharts usage={data.usage} />
 
       <article className="panel">
         <h3>Documentos recientes</h3>

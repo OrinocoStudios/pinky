@@ -1,5 +1,6 @@
 import { Controller, Get, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { SkipThrottle } from '@nestjs/throttler';
 import { GraphStorePort } from '../graph/domain/ports/graph-store.port';
 import { GRAPH_STORE_PORT } from '../../shared/di.tokens';
 import { BrainConfig } from '../../config/configuration';
@@ -14,6 +15,7 @@ type ServiceStatus = {
 const LLM_PING_TIMEOUT_MS = 3000;
 
 @Controller()
+@SkipThrottle({ query: true, upload: true, ingest: true })
 export class HealthController {
   constructor(
     @Inject(GRAPH_STORE_PORT)

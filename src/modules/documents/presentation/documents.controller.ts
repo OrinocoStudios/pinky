@@ -14,7 +14,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Throttle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { IngestDocumentUseCase } from '../../ingestion/application/ingest-document.usecase';
 import { DeleteDocumentUseCase } from '../application/delete-document.usecase';
 import { GenerateDocumentUseCase } from '../application/generate-document.usecase';
@@ -43,6 +43,7 @@ export class DocumentsController {
   ) {}
 
   @Post('text')
+  @SkipThrottle({ default: true, query: true, upload: true })
   @Throttle({ ingest: {} })
   @RequireApiKey()
   async ingestText(
@@ -63,6 +64,7 @@ export class DocumentsController {
   }
 
   @Post('generate')
+  @SkipThrottle({ default: true, query: true, upload: true })
   @Throttle({ ingest: {} })
   @RequireApiKey()
   async generateDocument(
@@ -85,6 +87,7 @@ export class DocumentsController {
   }
 
   @Post('upload')
+  @SkipThrottle({ default: true, query: true, ingest: true })
   @Throttle({ upload: {} })
   @RequireApiKey()
   @UseInterceptors(FileUploadInterceptor)
@@ -123,6 +126,7 @@ export class DocumentsController {
   }
 
   @Get()
+  @SkipThrottle({ query: true, upload: true, ingest: true })
   @Throttle({ default: {} })
   @RequireApiKey()
   async listDocuments(
@@ -157,6 +161,7 @@ export class DocumentsController {
   }
 
   @Get('scopes')
+  @SkipThrottle({ query: true, upload: true, ingest: true })
   @Throttle({ default: {} })
   @RequireApiKey()
   async listDocumentScopes() {
@@ -164,6 +169,7 @@ export class DocumentsController {
   }
 
   @Get(':id')
+  @SkipThrottle({ query: true, upload: true, ingest: true })
   @Throttle({ default: {} })
   @RequireApiKey()
   async getDocument(
@@ -187,6 +193,7 @@ export class DocumentsController {
   }
 
   @Delete(':id')
+  @SkipThrottle({ query: true, upload: true, ingest: true })
   @RequireApiKey()
   async deleteDocument(
     @Param('id') documentId: string,
@@ -202,10 +209,11 @@ export class DocumentsController {
   private resolveTenantId(rawTenantId?: string): string | undefined {
     const enableMultiTenant = this.configService.get('app.enableMultiTenant', { infer: true }) ?? false;
     const tenantId = rawTenantId?.trim();
+    const normalizedTenantId = tenantId && tenantId.length > 0 ? tenantId : undefined;
     if (enableMultiTenant && !tenantId) {
       throw new BadRequestException('X-Tenant-Id header is required when ENABLE_MULTI_TENANT=true');
     }
-    return tenantId;
+    return normalizedTenantId;
   }
 
   private resolveLibraryId(rawLibraryId?: string): string | undefined {

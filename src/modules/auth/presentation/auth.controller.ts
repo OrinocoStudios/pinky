@@ -1,5 +1,6 @@
 import { Body, Controller, ForbiddenException, Get, Post, Res, UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { SkipThrottle } from '@nestjs/throttler';
 import { Response } from 'express';
 import { BrainConfig } from '../../../config/configuration';
 import { AuthService } from '../application/auth.service';
@@ -11,6 +12,7 @@ import { AuthUser } from '../types/auth-user.type';
 import { DevLoginDto } from './dev-login.dto';
 
 @Controller('auth')
+@SkipThrottle({ query: true, upload: true, ingest: true })
 export class AuthController {
   constructor(
     private readonly authService: AuthService,

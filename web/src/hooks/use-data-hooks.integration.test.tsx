@@ -31,6 +31,7 @@ describe('data hooks', () => {
               ingestedByDay: [{ date: '2026-05-01', count: 2 }],
               byLibrary: [{ libraryId: 'lib-a', count: 2 }],
               bySource: [{ source: 'generated', count: 2 }],
+              byQueryCount: [{ documentId: 'doc-1', title: 'Doc 1', count: 3 }],
             },
             queries: {
               total: 3,

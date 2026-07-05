@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Headers, Post } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Throttle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { ReindexChunksUseCase } from '../../ingestion/application/reindex-chunks.usecase';
 import { ReindexDto } from './index.dto';
 import { RequireApiKey } from '../../../common/decorators/require-api-key.decorator';
@@ -14,6 +14,7 @@ export class IndexController {
   ) {}
 
   @Post('rebuild')
+  @SkipThrottle({ query: true, upload: true, ingest: true })
   @Throttle({ default: { ttl: 60000, limit: 2 } })
   @RequireApiKey()
   async rebuild(
@@ -33,6 +34,7 @@ export class IndexController {
   }
 
   @Post('incremental')
+  @SkipThrottle({ query: true, upload: true, ingest: true })
   @Throttle({ default: { ttl: 60000, limit: 3 } })
   @RequireApiKey()
   async incremental(

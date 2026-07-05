@@ -253,10 +253,10 @@ export class Neo4jDocumentRepository implements DocumentRepositoryPort, OnModule
         WHERE ($tenantId IS NULL OR d.tenantId = $tenantId)
           AND ($libraryId IS NULL OR d.libraryId = $libraryId)
           AND d.createdAt IS NOT NULL
-        WITH date(d.createdAt) AS day, startDate
+        WITH date(datetime(d.createdAt)) AS day, startDate
         WHERE day >= startDate
         RETURN toString(day) AS date, count(*) AS count
-        ORDER BY day ASC
+        ORDER BY date ASC
         `,
         {
           days: int(Math.max(days, 1)),

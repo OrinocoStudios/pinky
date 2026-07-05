@@ -17,6 +17,7 @@ import {
   FILE_TEXT_EXTRACTOR_PORT,
   GRAPH_EXTRACTOR_PORT,
   GRAPH_STORE_PORT,
+  QUERY_DOCUMENT_ANALYTICS_REPOSITORY,
 } from '../src/shared/di.tokens';
 
 import { DocumentRepositoryPort } from '../src/modules/documents/domain/ports/document-repository.port';
@@ -46,6 +47,7 @@ import { SummarizeUseCase } from '../src/modules/query/application/summarize.use
 import { SimpleChunkerService } from '../src/modules/ingestion/application/simple-chunker.service';
 import { PromptTemplateService } from '../src/modules/query/application/prompt-template.service';
 import { ChatHistoryRepositoryPort, ChatMessage } from '../src/modules/query/domain/ports/chat-history.repository.port';
+import { QueryDocumentAnalyticsRepositoryPort } from '../src/modules/query/domain/ports/query-document-analytics.repository.port';
 import { ChecksumService } from '../src/common/utils/checksum.service';
 import { StructuredLogger } from '../src/common/logger/structured-logger.service';
 import { ApiKeyGuard } from '../src/common/guards/api-key.guard';
@@ -431,6 +433,67 @@ export class MockChatHistoryRepository implements ChatHistoryRepositoryPort {
   }
 }
 
+export class MockQueryDocumentAnalyticsRepository implements QueryDocumentAnalyticsRepositoryPort {
+  hits: Array<{
+    queryExecutionId: string;
+    createdAt: string;
+    tenantId?: string;
+    libraryId?: string;
+    documentId: string;
+    title?: string;
+  }> = [];
+
+  async saveRetrievedDocuments(input: {
+    queryExecutionId: string;
+    createdAt: string;
+    tenantId?: string;
+    libraryId?: string;
+    documents: Array<{ documentId: string; title?: string; libraryId?: string }>;
+  }): Promise<void> {
+    this.hits.push(
+      ...input.documents.map((document) => ({
+        queryExecutionId: input.queryExecutionId,
+        createdAt: input.createdAt,
+        tenantId: input.tenantId,
+        libraryId: document.libraryId ?? input.libraryId,
+        documentId: document.documentId,
+        title: document.title,
+      })),
+    );
+  }
+
+  async getTopDocumentsByQueryCount(
+    days: number,
+    limit: number,
+    tenantId?: string,
+    libraryId?: string,
+  ): Promise<Array<{ documentId: string; title?: string; count: number }>> {
+    const start = new Date();
+    start.setUTCHours(0, 0, 0, 0);
+    start.setUTCDate(start.getUTCDate() - Math.max(days - 1, 0));
+    const counts = new Map<string, { count: number; title?: string }>();
+    for (const hit of this.hits) {
+      if (tenantId && hit.tenantId !== tenantId) continue;
+      if (libraryId && hit.libraryId !== libraryId) continue;
+      const createdAt = new Date(hit.createdAt);
+      if (Number.isNaN(createdAt.getTime()) || createdAt < start) continue;
+      const current = counts.get(hit.documentId) ?? { count: 0, title: hit.title };
+      counts.set(hit.documentId, {
+        count: current.count + 1,
+        title: current.title ?? hit.title,
+      });
+    }
+    return [...counts.entries()]
+      .map(([documentId, value]) => ({
+        documentId,
+        title: value.title,
+        count: value.count,
+      }))
+      .sort((a, b) => b.count - a.count || a.documentId.localeCompare(b.documentId))
+      .slice(0, Math.max(limit, 1));
+  }
+}
+
 export type ThrottlingOverrides = {
   enabled: boolean;
   ttl?: number;
@@ -456,12 +519,14 @@ export async function createTestApp(overrides?: {
   repo: InMemoryDocumentRepository;
   graphStore: MockGraphStore;
   chatHistory: MockChatHistoryRepository;
+  queryDocumentAnalytics: MockQueryDocumentAnalyticsRepository;
   jwtService: JwtService;
 }> {
   const repo = new InMemoryDocumentRepository();
   const graphStore = new MockGraphStore();
   const chunkSearch = new MockChunkSearch(repo);
   const chatHistory = new MockChatHistoryRepository();
+  const queryDocumentAnalytics = new MockQueryDocumentAnalyticsRepository();
 
   const throttling = overrides?.throttling;
   const throttlerTtl = throttling?.ttl ?? 60000;
@@ -574,6 +639,7 @@ export async function createTestApp(overrides?: {
       { provide: ANSWER_GENERATOR_PORT, useValue: new MockAnswerGenerator() },
       { provide: CHUNK_SEARCH_PORT, useValue: chunkSearch },
       { provide: CHAT_HISTORY_REPOSITORY, useValue: chatHistory },
+      { provide: QUERY_DOCUMENT_ANALYTICS_REPOSITORY, useValue: queryDocumentAnalytics },
       { provide: DOCUMENT_GENERATOR_PORT, useValue: new MockDocumentGenerator() },
       { provide: FILE_TEXT_EXTRACTOR_PORT, useValue: new MockFileTextExtractor() },
       ...throttlerGuardProvider,
@@ -586,5 +652,5 @@ export async function createTestApp(overrides?: {
   app.useGlobalFilters(new HttpExceptionFilter());
   await app.init();
 
-  return { app, repo, graphStore, chatHistory, jwtService: moduleRef.get(JwtService) };
+  return { app, repo, graphStore, chatHistory, queryDocumentAnalytics, jwtService: moduleRef.get(JwtService) };
 }

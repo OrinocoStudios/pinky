@@ -112,6 +112,50 @@ describe('Auth and admin protection (e2e)', () => {
     expect(response.body.documents.total).toBe(0);
     expect(response.body.usage).toBeDefined();
     expect(Array.isArray(response.body.usage.documents.ingestedByDay)).toBe(true);
+    expect(Array.isArray(response.body.usage.documents.byQueryCount)).toBe(true);
     expect(response.body.usage.queries.total).toBe(0);
+  });
+
+  it('includes top documentos por consultas based on retrieved documents', async () => {
+    const token = await jwtService.signAsync({
+      sub: 'github:user-3',
+      email: 'admin@example.com',
+      name: 'Admin User',
+      provider: 'github',
+      providerUserId: 'user-3',
+      isAdmin: true,
+    });
+
+    const created = await request(app.getHttpServer())
+      .post('/documents/text')
+      .set('X-API-Key', 'test-api-key')
+      .set('X-Library-Id', 'lib-a')
+      .send({
+        title: 'Doc para conteo',
+        rawText: 'Contenido para validar conteo de consultas por documento.',
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/query')
+      .set('X-API-Key', 'test-api-key')
+      .set('X-Library-Id', 'lib-a')
+      .send({ query: 'contenido', topK: 5 })
+      .expect(201);
+
+    const response = await request(app.getHttpServer())
+      .get('/admin/overview')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Library-Id', 'lib-a')
+      .expect(200);
+
+    expect(response.body.usage.documents.byQueryCount).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          documentId: created.body.documentId,
+          count: 1,
+        }),
+      ]),
+    );
   });
 });

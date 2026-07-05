@@ -27,17 +27,22 @@ function formatLibraryLabel(libraryId: string): string {
   return libraryId.length > 18 ? `${libraryId.slice(0, 16)}...` : libraryId;
 }
 
+function formatDocumentLabel(title: string | undefined, documentId: string): string {
+  const baseLabel = title?.trim() || documentId;
+  return baseLabel.length > 24 ? `${baseLabel.slice(0, 22)}...` : baseLabel;
+}
+
 export function UsageCharts({ usage }: UsageChartsProps) {
-  const timelineData = usage.documents.ingestedByDay.map((entry, index) => ({
+  const timelineData = (usage?.documents?.ingestedByDay ?? []).map((entry, index) => ({
     id: `${entry.date}-${index}`,
     date: entry.date,
     label: formatDayLabel(entry.date),
     ingesta: entry.count,
-    consultas: usage.queries.byDay[index]?.count ?? 0,
+    consultas: usage?.queries?.byDay?.[index]?.count ?? 0,
   }));
 
-  const libraryData = usage.documents.byLibrary.map((entry) => {
-    const queryUsage = usage.queries.byLibrary.find((queryEntry) => queryEntry.libraryId === entry.libraryId);
+  const libraryData = (usage?.documents?.byLibrary ?? []).map((entry) => {
+    const queryUsage = usage?.queries?.byLibrary?.find((queryEntry) => queryEntry.libraryId === entry.libraryId);
     return {
       libraryId: entry.libraryId,
       label: formatLibraryLabel(entry.libraryId),
@@ -46,9 +51,16 @@ export function UsageCharts({ usage }: UsageChartsProps) {
     };
   });
 
-  const sourceData = usage.documents.bySource.map((entry) => ({
+  const sourceData = (usage?.documents?.bySource ?? []).map((entry) => ({
     source: entry.source,
     documentos: entry.count,
+  }));
+
+  const topDocumentsByQueryData = (usage?.documents?.byQueryCount ?? []).map((entry) => ({
+    documentId: entry.documentId,
+    label: formatDocumentLabel(entry.title, entry.documentId),
+    title: entry.title,
+    consultas: entry.count,
   }));
 
   return (
@@ -142,6 +154,34 @@ export function UsageCharts({ usage }: UsageChartsProps) {
             </div>
           ) : (
             <p className="muted-text">Sin datos de origen de documentos.</p>
+          )}
+        </article>
+
+        <article className="usage-chart-card usage-source-card">
+          <h4>Top documentos por consultas</h4>
+          {topDocumentsByQueryData.length > 0 ? (
+            <div className="usage-chart-area">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topDocumentsByQueryData}>
+                  <CartesianGrid stroke="rgba(152, 173, 214, 0.12)" />
+                  <XAxis dataKey="label" stroke="#95a7c5" tick={{ fill: '#95a7c5', fontSize: 12 }} />
+                  <YAxis allowDecimals={false} stroke="#95a7c5" tick={{ fill: '#95a7c5', fontSize: 12 }} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#101c2d',
+                      border: '1px solid rgba(152, 173, 214, 0.22)',
+                      borderRadius: 10,
+                    }}
+                    labelFormatter={(_, payload) =>
+                      payload?.[0]?.payload?.title || payload?.[0]?.payload?.documentId || ''
+                    }
+                  />
+                  <Bar dataKey="consultas" fill="#29d3a0" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="muted-text">Todavia no hay consultas asociadas a documentos.</p>
           )}
         </article>
       </div>

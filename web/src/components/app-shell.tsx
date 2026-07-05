@@ -5,7 +5,7 @@ import { useCurrentUser, useLogout } from '../hooks/use-auth';
 
 const libraryNavigation = [
   { to: '/documents', label: 'Documentos' },
-  { to: '/', label: 'Resumen' },
+  { to: '/', label: 'Dashboard' },
 ];
 
 const toolsNavigation = [

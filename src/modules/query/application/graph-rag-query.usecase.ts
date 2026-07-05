@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectMetric } from '@willsoto/nestjs-prometheus';
 import { Counter, Histogram } from 'prom-client';
@@ -7,6 +8,7 @@ import {
   DOCUMENT_REPOSITORY,
   GRAPH_STORE_PORT,
   CHAT_HISTORY_REPOSITORY,
+  QUERY_DOCUMENT_ANALYTICS_REPOSITORY,
 } from '../../../shared/di.tokens';
 import { ChunkSearchPort } from '../../search/domain/ports/chunk-search.port';
 import { GraphStorePort } from '../../graph/domain/ports/graph-store.port';
@@ -15,6 +17,7 @@ import { PromptTemplateService } from './prompt-template.service';
 import { StructuredLogger } from '../../../common/logger/structured-logger.service';
 import { DocumentRepositoryPort } from '../../documents/domain/ports/document-repository.port';
 import { ChatHistoryRepositoryPort } from '../domain/ports/chat-history.repository.port';
+import { QueryDocumentAnalyticsRepositoryPort } from '../domain/ports/query-document-analytics.repository.port';
 
 export type GraphRagQueryInput = {
   tenantId?: string;
@@ -55,6 +58,8 @@ export class GraphRagQueryUseCase {
     private readonly answerGenerator: AnswerGeneratorPort,
     @Inject(CHAT_HISTORY_REPOSITORY)
     private readonly chatHistory: ChatHistoryRepositoryPort,
+    @Inject(QUERY_DOCUMENT_ANALYTICS_REPOSITORY)
+    private readonly queryDocumentAnalyticsRepository: QueryDocumentAnalyticsRepositoryPort,
     private readonly promptTemplate: PromptTemplateService,
     private readonly logger: StructuredLogger,
     @InjectMetric('brain_queries_total')
@@ -106,6 +111,36 @@ export class GraphRagQueryUseCase {
       this.logger.debug('Retrieved chunks for query', GraphRagQueryUseCase.name, {
         chunks: chunks.length,
       });
+      const retrievedDocuments = [
+        ...new Map(
+          chunks
+            .filter((chunk: any) => Boolean(chunk.documentId))
+            .map((chunk: any) => {
+              const mappedDocument = documentMap.get(chunk.documentId);
+              return [
+                String(chunk.documentId),
+                {
+                  documentId: String(chunk.documentId),
+                  title: mappedDocument?.title,
+                  libraryId: chunk.libraryId ?? mappedDocument?.libraryId,
+                },
+              ] as const;
+            }),
+        ).values(),
+      ];
+      this.queryDocumentAnalyticsRepository
+        .saveRetrievedDocuments({
+          queryExecutionId: randomUUID(),
+          createdAt: new Date().toISOString(),
+          tenantId: input.tenantId,
+          libraryId: libraryIds?.[0],
+          documents: retrievedDocuments,
+        })
+        .catch((error: unknown) =>
+          this.logger.error(
+            `Failed to save query document analytics: ${error instanceof Error ? error.message : String(error)}`,
+          ),
+        );
 
       // Step 2: Extract entity hints and query graph
       const entityHints = input.entityHints?.length

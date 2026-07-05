@@ -141,10 +141,10 @@ export class Neo4jChatHistoryRepository implements ChatHistoryRepositoryPort, On
           AND ($tenantId IS NULL OR m.tenantId = $tenantId)
           AND ($libraryId IS NULL OR m.libraryId = $libraryId)
           AND m.createdAt IS NOT NULL
-        WITH date(m.createdAt) AS day, startDate
+        WITH date(datetime(m.createdAt)) AS day, startDate
         WHERE day >= startDate
         RETURN toString(day) AS date, count(*) AS count
-        ORDER BY day ASC
+        ORDER BY date ASC
         `,
         {
           days: int(Math.max(days, 1)),

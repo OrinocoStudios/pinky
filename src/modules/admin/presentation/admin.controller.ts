@@ -1,17 +1,26 @@
 import { Controller, Get, Headers, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { SkipThrottle } from '@nestjs/throttler';
 import { RequireApiKey } from '../../../common/decorators/require-api-key.decorator';
 import { BrainConfig } from '../../../config/configuration';
 import { DocumentRepositoryPort } from '../../documents/domain/ports/document-repository.port';
 import { DocumentRecord } from '../../documents/domain/models/document.model';
 import { GraphStorePort } from '../../graph/domain/ports/graph-store.port';
 import { ChatHistoryRepositoryPort } from '../../query/domain/ports/chat-history.repository.port';
-import { CHAT_HISTORY_REPOSITORY, DOCUMENT_REPOSITORY, GRAPH_STORE_PORT } from '../../../shared/di.tokens';
+import { QueryDocumentAnalyticsRepositoryPort } from '../../query/domain/ports/query-document-analytics.repository.port';
+import {
+  CHAT_HISTORY_REPOSITORY,
+  DOCUMENT_REPOSITORY,
+  GRAPH_STORE_PORT,
+  QUERY_DOCUMENT_ANALYTICS_REPOSITORY,
+} from '../../../shared/di.tokens';
 
 const USAGE_DAYS = 14;
 const TOP_LIBRARY_LIMIT = 5;
+const TOP_DOCUMENT_LIMIT = 10;
 
 @Controller('admin')
+@SkipThrottle({ query: true, upload: true, ingest: true })
 export class AdminController {
   constructor(
     private readonly configService: ConfigService<BrainConfig>,
@@ -19,6 +28,8 @@ export class AdminController {
     private readonly documentRepository: DocumentRepositoryPort,
     @Inject(CHAT_HISTORY_REPOSITORY)
     private readonly chatHistoryRepository: ChatHistoryRepositoryPort,
+    @Inject(QUERY_DOCUMENT_ANALYTICS_REPOSITORY)
+    private readonly queryDocumentAnalyticsRepository: QueryDocumentAnalyticsRepositoryPort,
     @Inject(GRAPH_STORE_PORT)
     private readonly graphStore: GraphStorePort,
   ) {}
@@ -51,6 +62,7 @@ export class AdminController {
       totalQueries,
       queriesByDay,
       queriesByLibrary,
+      topDocumentsByQueries,
     ] = await Promise.all([
       this.documentRepository.countDocuments(tenantId, libraryId),
       this.listScopedDocuments(tenantId, libraryId),
@@ -60,7 +72,14 @@ export class AdminController {
       this.chatHistoryRepository.countQueries(tenantId, libraryId),
       this.chatHistoryRepository.getQueryCountByDay(USAGE_DAYS, tenantId, libraryId),
       this.chatHistoryRepository.getTopLibrariesByQueryCount(TOP_LIBRARY_LIMIT, tenantId, libraryId),
+      this.queryDocumentAnalyticsRepository.getTopDocumentsByQueryCount(
+        USAGE_DAYS,
+        TOP_DOCUMENT_LIMIT,
+        tenantId,
+        libraryId,
+      ),
     ]);
+    const topDocumentsByQueryCount = await this.hydrateDocumentTitles(topDocumentsByQueries);
 
     return {
       health: {
@@ -85,6 +104,7 @@ export class AdminController {
           ingestedByDay: this.fillDateSeries(USAGE_DAYS, documentIngestedByDay),
           byLibrary: documentsByLibrary,
           bySource: documentsBySource,
+          byQueryCount: topDocumentsByQueryCount,
         },
         queries: {
           total: totalQueries,
@@ -129,6 +149,24 @@ export class AdminController {
       });
     }
     return dateSeries;
+  }
+
+  private async hydrateDocumentTitles(
+    entries: Array<{ documentId: string; title?: string; count: number }>,
+  ): Promise<Array<{ documentId: string; title?: string; count: number }>> {
+    const hydratedEntries = await Promise.all(
+      entries.map(async (entry) => {
+        if (entry.title?.trim()) {
+          return entry;
+        }
+        const document = await this.documentRepository.findDocumentById(entry.documentId);
+        return {
+          ...entry,
+          title: document?.title,
+        };
+      }),
+    );
+    return hydratedEntries;
   }
 
   private resolveTenantId(rawTenantId?: string): string | undefined {
