@@ -286,6 +286,47 @@ describe('GraphRagQueryUseCase', () => {
     expect(result.truthFacts).toEqual([]);
   });
 
+  describe('retrieve', () => {
+    it('runs retrieval only: no answer generation, no chat history', async () => {
+      const result = await useCase.retrieve({
+        query: 'What did Einstein develop?',
+        topK: 5,
+        sessionId: 'session-1',
+      });
+
+      expect(answerGenerator.generate).not.toHaveBeenCalled();
+      expect(chatHistory.saveMessage).not.toHaveBeenCalled();
+      expect(result.fastContext).toHaveLength(1);
+      expect(result.fastContext[0].title).toBe('Clinical note');
+      expect(result.truthFacts).toEqual([
+        { id: 'c1', from: 'e1', relation: 'DEVELOPED', to: 'e2' },
+      ]);
+    });
+
+    it('applies the score filter and exposes scores', async () => {
+      chunkSearch.hybridSearch.mockResolvedValue([
+        { chunkId: 'c1', documentId: 'd1', seq: 0, text: 'relevante', createdAt: '', score: 0.91 },
+        { chunkId: 'c2', documentId: 'd1', seq: 1, text: 'ruido', createdAt: '', score: 0.8 },
+      ]);
+
+      const result = await useCase.retrieve({ query: 'test', topK: 5 });
+
+      expect(result.fastContext.map((c) => c.id)).toEqual(['c1']);
+      expect(result.fastContext[0].score).toBe(0.91);
+    });
+
+    it('still records document analytics', async () => {
+      await useCase.retrieve({ query: 'test', topK: 5, tenantId: 'tenant-a' });
+
+      expect(queryDocumentAnalytics.saveRetrievedDocuments).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: 'tenant-a',
+          documents: [expect.objectContaining({ documentId: 'd1' })],
+        }),
+      );
+    });
+  });
+
   it('should persist deduplicated retrieved documents for analytics', async () => {
     chunkSearch.hybridSearch.mockResolvedValue([
       { chunkId: 'c1', documentId: 'd1', seq: 0, text: 'A', createdAt: '' },

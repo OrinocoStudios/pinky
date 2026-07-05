@@ -46,6 +46,8 @@ import { GraphRagQueryUseCase } from '../src/modules/query/application/graph-rag
 import { SummarizeUseCase } from '../src/modules/query/application/summarize.usecase';
 import { SimpleChunkerService } from '../src/modules/ingestion/application/simple-chunker.service';
 import { PromptTemplateService } from '../src/modules/query/application/prompt-template.service';
+import { ChunkScoreFilterService } from '../src/modules/query/application/chunk-score-filter.service';
+import { PromptBudgetService } from '../src/modules/query/application/prompt-budget.service';
 import { ChatHistoryRepositoryPort, ChatMessage } from '../src/modules/query/domain/ports/chat-history.repository.port';
 import { QueryDocumentAnalyticsRepositoryPort } from '../src/modules/query/domain/ports/query-document-analytics.repository.port';
 import { ChecksumService } from '../src/common/utils/checksum.service';
@@ -624,6 +626,8 @@ export async function createTestApp(overrides?: {
       SummarizeUseCase,
       SimpleChunkerService,
       PromptTemplateService,
+      ChunkScoreFilterService,
+      PromptBudgetService,
       ChecksumService,
       StructuredLogger,
       ApiKeyGuard,

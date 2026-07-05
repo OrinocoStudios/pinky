@@ -50,6 +50,32 @@ export type GraphRagQueryOutput = {
   tokensUsed?: number;
 };
 
+export type GraphRagRetrieveOutput = Pick<GraphRagQueryOutput, 'fastContext' | 'truthFacts'>;
+
+type RetrievedContext = {
+  libraryIds?: string[];
+  contextSources: Array<{
+    chunkId: string;
+    id: string;
+    text: string;
+    documentId?: string;
+    title?: string;
+    libraryId?: string;
+    metadata?: Record<string, unknown>;
+    score?: number;
+  }>;
+  graphFacts: Array<{
+    id: string;
+    fromEntityId: string;
+    type: string;
+    toEntityId: string;
+    confidence: number;
+  }>;
+  chunksRetrieved: number;
+  entitiesRetrieved: number;
+  relationsRetrieved: number;
+};
+
 @Injectable()
 export class GraphRagQueryUseCase {
   constructor(
@@ -93,100 +119,11 @@ export class GraphRagQueryUseCase {
       }).catch((err: any) => this.logger.error(`Failed to save user message: ${err.message}`));
     }
 
-    const libraryIds = this.normalizeLibraryIds(input.libraryIds);
-
     try {
-      // Step 1: Retrieve chunks from search engine
-      const retrievedChunks = await this.chunkSearch.hybridSearch({
-        tenantId: input.tenantId,
-        libraryIds,
-        queryText: input.query,
-        topK: input.topK,
-      });
-      const chunks = this.filterChunksByScore(retrievedChunks);
-      const documentIds = [...new Set(chunks.map((chunk: any) => chunk.documentId).filter(Boolean))];
-      const documents = await Promise.all(
-        documentIds.map(async (documentId: string) => ({
-          documentId,
-          document: await this.documentRepository.findDocumentById(documentId),
-        })),
-      );
-      const documentMap = new Map(
-        documents
-          .filter((entry: any) => entry.document)
-          .map((entry: any) => [entry.documentId, entry.document]),
-      );
+      const { libraryIds, contextSources, graphFacts, chunksRetrieved, entitiesRetrieved, relationsRetrieved } =
+        await this.retrieveContext(input);
 
-      this.logger.debug('Retrieved chunks for query', GraphRagQueryUseCase.name, {
-        chunks: chunks.length,
-      });
-      const retrievedDocuments = [
-        ...new Map(
-          chunks
-            .filter((chunk: any) => Boolean(chunk.documentId))
-            .map((chunk: any) => {
-              const mappedDocument = documentMap.get(chunk.documentId);
-              return [
-                String(chunk.documentId),
-                {
-                  documentId: String(chunk.documentId),
-                  title: mappedDocument?.title,
-                  libraryId: chunk.libraryId ?? mappedDocument?.libraryId,
-                },
-              ] as const;
-            }),
-        ).values(),
-      ];
-      this.queryDocumentAnalyticsRepository
-        .saveRetrievedDocuments({
-          queryExecutionId: randomUUID(),
-          createdAt: new Date().toISOString(),
-          tenantId: input.tenantId,
-          libraryId: libraryIds?.[0],
-          documents: retrievedDocuments,
-        })
-        .catch((error: unknown) =>
-          this.logger.error(
-            `Failed to save query document analytics: ${error instanceof Error ? error.message : String(error)}`,
-          ),
-        );
-
-      // Step 2: Extract entity hints and query graph
-      const entityHints = input.entityHints?.length
-        ? input.entityHints
-        : this.extractEntityHintsFromQuery(input.query);
-      const entities = await this.graphStore.findEntitiesByNames(entityHints, input.tenantId, libraryIds);
-      const relations = await this.graphStore.findRelationshipsForEntityIds(
-        entities.map((e: any) => e.entityId),
-        input.tenantId,
-        libraryIds,
-      );
-
-      this.logger.debug('Retrieved graph context for query', GraphRagQueryUseCase.name, {
-        entities: entities.length,
-        relations: relations.length,
-      });
-
-      // Step 3: Build grounded prompt with IDs
-      const contextSources = chunks.map((chunk: any) => ({
-        chunkId: chunk.chunkId,
-        id: chunk.chunkId,
-        text: chunk.text,
-        documentId: chunk.documentId,
-        title: documentMap.get(chunk.documentId)?.title,
-        libraryId: chunk.libraryId ?? documentMap.get(chunk.documentId)?.libraryId,
-        metadata: documentMap.get(chunk.documentId)?.metadata,
-        score: chunk.score,
-      }));
-
-      const graphFacts = relations.map((rel: any) => ({
-        id: rel.sourceChunkId,
-        fromEntityId: rel.fromEntityId,
-        type: rel.type,
-        toEntityId: rel.toEntityId,
-        confidence: rel.confidence,
-      }));
-
+      // Step 3: Build grounded prompt with IDs.
       // Fit context to the model slot: best chunks first, then facts.
       const baseText = this.promptTemplate.buildGroundedPrompt({
         query: input.query,
@@ -252,9 +189,9 @@ export class GraphRagQueryUseCase {
         sessionId: input.sessionId,
         queryLength: input.query.length,
         topK: input.topK,
-        chunksRetrieved: chunks.length,
-        entitiesRetrieved: entities.length,
-        relationsRetrieved: relations.length,
+        chunksRetrieved,
+        entitiesRetrieved,
+        relationsRetrieved,
         sourcesCited: result.sourcesUsed.length,
         model: result.model,
         tokensUsed: result.tokensUsed,
@@ -298,6 +235,165 @@ export class GraphRagQueryUseCase {
       );
       throw error;
     }
+  }
+
+  /**
+   * Retrieval-only path (Steps 1-2): returns grounded context without paying
+   * an LLM generation. Meant for consumers that write their own reply
+   * (e.g. IA Nonna's retrieve-then-generate). No chat history is persisted.
+   */
+  async retrieve(input: GraphRagQueryInput): Promise<GraphRagRetrieveOutput> {
+    const startTime = Date.now();
+    this.queriesTotalCounter.inc();
+
+    try {
+      const context = await this.retrieveContext(input);
+
+      const latency = Date.now() - startTime;
+      this.queryLatencyHistogram.observe(latency);
+      this.logger.event('RetrieveExecuted', {
+        tenantId: input.tenantId,
+        libraryIds: context.libraryIds,
+        queryLength: input.query.length,
+        topK: input.topK,
+        chunksRetrieved: context.chunksRetrieved,
+        entitiesRetrieved: context.entitiesRetrieved,
+        relationsRetrieved: context.relationsRetrieved,
+        latencyMs: latency,
+      });
+
+      return {
+        fastContext: context.contextSources.map((source) => ({
+          id: source.id,
+          text: source.text,
+          documentId: source.documentId,
+          title: source.title,
+          libraryId: source.libraryId,
+          metadata: source.metadata,
+          score: source.score,
+        })),
+        truthFacts: context.graphFacts.map((f) => ({
+          id: f.id,
+          from: f.fromEntityId,
+          relation: f.type,
+          to: f.toEntityId,
+        })),
+      };
+    } catch (error: any) {
+      this.queryErrorsCounter.inc();
+      this.queryLatencyHistogram.observe(Date.now() - startTime);
+      this.logger.error(
+        'GraphRAG retrieve failed',
+        error instanceof Error ? error.stack : undefined,
+        GraphRagQueryUseCase.name,
+        { errorMessage: error instanceof Error ? error.message : String(error) },
+      );
+      throw error;
+    }
+  }
+
+  /** Steps 1-2 shared by execute() and retrieve(): chunk search + graph context. */
+  private async retrieveContext(input: GraphRagQueryInput): Promise<RetrievedContext> {
+    const libraryIds = this.normalizeLibraryIds(input.libraryIds);
+
+    // Step 1: Retrieve chunks from search engine
+    const retrievedChunks = await this.chunkSearch.hybridSearch({
+      tenantId: input.tenantId,
+      libraryIds,
+      queryText: input.query,
+      topK: input.topK,
+    });
+    const chunks = this.filterChunksByScore(retrievedChunks);
+    const documentIds = [...new Set(chunks.map((chunk: any) => chunk.documentId).filter(Boolean))];
+    const documents = await Promise.all(
+      documentIds.map(async (documentId: string) => ({
+        documentId,
+        document: await this.documentRepository.findDocumentById(documentId),
+      })),
+    );
+    const documentMap = new Map(
+      documents
+        .filter((entry: any) => entry.document)
+        .map((entry: any) => [entry.documentId, entry.document]),
+    );
+
+    this.logger.debug('Retrieved chunks for query', GraphRagQueryUseCase.name, {
+      chunks: chunks.length,
+    });
+    const retrievedDocuments = [
+      ...new Map(
+        chunks
+          .filter((chunk: any) => Boolean(chunk.documentId))
+          .map((chunk: any) => {
+            const mappedDocument = documentMap.get(chunk.documentId);
+            return [
+              String(chunk.documentId),
+              {
+                documentId: String(chunk.documentId),
+                title: mappedDocument?.title,
+                libraryId: chunk.libraryId ?? mappedDocument?.libraryId,
+              },
+            ] as const;
+          }),
+      ).values(),
+    ];
+    this.queryDocumentAnalyticsRepository
+      .saveRetrievedDocuments({
+        queryExecutionId: randomUUID(),
+        createdAt: new Date().toISOString(),
+        tenantId: input.tenantId,
+        libraryId: libraryIds?.[0],
+        documents: retrievedDocuments,
+      })
+      .catch((error: unknown) =>
+        this.logger.error(
+          `Failed to save query document analytics: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      );
+
+    // Step 2: Extract entity hints and query graph
+    const entityHints = input.entityHints?.length
+      ? input.entityHints
+      : this.extractEntityHintsFromQuery(input.query);
+    const entities = await this.graphStore.findEntitiesByNames(entityHints, input.tenantId, libraryIds);
+    const relations = await this.graphStore.findRelationshipsForEntityIds(
+      entities.map((e: any) => e.entityId),
+      input.tenantId,
+      libraryIds,
+    );
+
+    this.logger.debug('Retrieved graph context for query', GraphRagQueryUseCase.name, {
+      entities: entities.length,
+      relations: relations.length,
+    });
+
+    const contextSources = chunks.map((chunk: any) => ({
+      chunkId: chunk.chunkId,
+      id: chunk.chunkId,
+      text: chunk.text,
+      documentId: chunk.documentId,
+      title: documentMap.get(chunk.documentId)?.title,
+      libraryId: chunk.libraryId ?? documentMap.get(chunk.documentId)?.libraryId,
+      metadata: documentMap.get(chunk.documentId)?.metadata,
+      score: chunk.score,
+    }));
+
+    const graphFacts = relations.map((rel: any) => ({
+      id: rel.sourceChunkId,
+      fromEntityId: rel.fromEntityId,
+      type: rel.type,
+      toEntityId: rel.toEntityId,
+      confidence: rel.confidence,
+    }));
+
+    return {
+      libraryIds,
+      contextSources,
+      graphFacts,
+      chunksRetrieved: chunks.length,
+      entitiesRetrieved: entities.length,
+      relationsRetrieved: relations.length,
+    };
   }
 
   private resolveAnswerMaxTokens(): number {

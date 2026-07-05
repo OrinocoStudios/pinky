@@ -120,6 +120,58 @@ describe('Query (e2e)', () => {
     expect(context).not.toContain('Beta library context only.');
   });
 
+  it('POST /retrieve — should return grounded context without generating an answer', async () => {
+    await request(app.getHttpServer())
+      .post('/documents/text')
+      .send({
+        title: 'Physics',
+        rawText: 'Albert Einstein developed the theory of relativity and won the Nobel Prize.',
+      })
+      .expect(201);
+
+    const res = await request(app.getHttpServer())
+      .post('/retrieve')
+      .send({ query: 'What did Einstein develop?', topK: 5 })
+      .expect(201);
+
+    expect(res.body.fastContext).toBeInstanceOf(Array);
+    expect(res.body.fastContext.length).toBeGreaterThan(0);
+    expect(res.body.truthFacts).toBeInstanceOf(Array);
+    expect(res.body.answer).toBeUndefined();
+    expect(res.body.prompt).toBeUndefined();
+  });
+
+  it('POST /retrieve — should scope retrieval by X-Library-Id header', async () => {
+    await request(app.getHttpServer())
+      .post('/documents/text')
+      .set('X-Library-Id', 'library-a')
+      .send({ title: 'Library A', rawText: 'Alpha library context only.' })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/documents/text')
+      .set('X-Library-Id', 'library-b')
+      .send({ title: 'Library B', rawText: 'Beta library context only.' })
+      .expect(201);
+
+    const res = await request(app.getHttpServer())
+      .post('/retrieve')
+      .set('X-Library-Id', 'library-a')
+      .send({ query: 'Which library has alpha?', topK: 10 })
+      .expect(201);
+
+    const context = (res.body.fastContext ?? []).map((chunk: { text: string }) => chunk.text).join(' ');
+    expect(context).toContain('Alpha library context only.');
+    expect(context).not.toContain('Beta library context only.');
+  });
+
+  it('POST /retrieve — should reject missing query field', async () => {
+    await request(app.getHttpServer())
+      .post('/retrieve')
+      .send({})
+      .expect(400);
+  });
+
   it('POST /query — should support multiple libraryIds in the body', async () => {
     await request(app.getHttpServer())
       .post('/documents/text')

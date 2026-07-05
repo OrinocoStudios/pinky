@@ -3,7 +3,7 @@ import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
 import { GraphRagQueryUseCase } from '../application/graph-rag-query.usecase';
 import { SummarizeUseCase } from '../application/summarize.usecase';
-import { QueryDto, QueryResponseDto } from './query.dto';
+import { QueryDto, QueryResponseDto, RetrieveResponseDto } from './query.dto';
 import { SummarizeDto, SummarizeResponseDto } from './summarize.dto';
 import { RequireApiKey } from '../../../common/decorators/require-api-key.decorator';
 import { BrainConfig } from '../../../config/configuration';
@@ -56,6 +56,37 @@ export class QueryController {
       model: result.model,
       tokensUsed: result.tokensUsed,
       prompt: result.prompt,
+    };
+  }
+
+  @Post('retrieve')
+  @SkipThrottle({ default: true, upload: true, ingest: true })
+  @Throttle({ query: {} })
+  @RequireApiKey()
+  async retrieve(
+    @Body() body: QueryDto,
+    @Headers('x-tenant-id') tenantHeader?: string,
+    @Headers('x-library-id') libraryHeader?: string,
+  ): Promise<RetrieveResponseDto> {
+    const tenantId = this.resolveTenantId(tenantHeader);
+    const libraryIds = this.resolveLibraryIds(body.libraryIds, libraryHeader);
+    this.logger.log(`Received retrieve: "${body.query.substring(0, 100)}${body.query.length > 100 ? '...' : ''}"`);
+
+    const result = await this.graphRagQueryUseCase.retrieve({
+      tenantId,
+      libraryIds,
+      query: body.query,
+      entityHints: body.entityHints,
+      topK: body.topK ?? 8,
+    });
+
+    this.logger.log(
+      `Retrieve completed: chunks=${result.fastContext.length}, facts=${result.truthFacts.length}`,
+    );
+
+    return {
+      fastContext: result.fastContext,
+      truthFacts: result.truthFacts,
     };
   }
 

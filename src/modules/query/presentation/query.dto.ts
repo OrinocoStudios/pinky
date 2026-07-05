@@ -41,6 +41,11 @@ export class GraphFactDto {
   to!: string;
 }
 
+export class RetrieveResponseDto {
+  fastContext!: ChunkSourceDto[];
+  truthFacts!: GraphFactDto[];
+}
+
 export class QueryResponseDto {
   answer!: string;
   sourcesUsed!: string[];
