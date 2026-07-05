@@ -102,4 +102,8 @@ async function bootstrap() {
   await app.listen(port);
 }
 
-bootstrap();
+bootstrap().catch((error) => {
+  // Fatal boot errors must be visible in logs before the supervisor restarts us.
+  console.error('Fatal bootstrap error', error);
+  process.exit(1);
+});

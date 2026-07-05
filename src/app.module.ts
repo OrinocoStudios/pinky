@@ -1,4 +1,4 @@
-import { Inject, Logger, Module, OnModuleInit } from '@nestjs/common';
+import { Logger, Module, OnModuleInit } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -23,7 +23,7 @@ import {
 } from './shared/di.tokens';
 import { Neo4jConnectionService } from './modules/graph/infrastructure/neo4j/neo4j-connection.service';
 import { Neo4jGraphStoreAdapter } from './modules/graph/infrastructure/neo4j/neo4j-graph-store.adapter';
-import { GraphStorePort } from './modules/graph/domain/ports/graph-store.port';
+import { VectorIndexInitializerService } from './modules/graph/application/vector-index-initializer.service';
 import { Neo4jChunkSearchAdapter } from './modules/search/infrastructure/neo4j/neo4j-chunk-search.adapter';
 import { Neo4jDocumentRepository } from './modules/documents/infrastructure/neo4j/neo4j-document.repository';
 import { IngestDocumentUseCase } from './modules/ingestion/application/ingest-document.usecase';
@@ -35,7 +35,6 @@ import { GraphRagQueryUseCase } from './modules/query/application/graph-rag-quer
 import { SummarizeUseCase } from './modules/query/application/summarize.usecase';
 import { DocumentsController } from './modules/documents/presentation/documents.controller';
 import { SimpleChunkerService } from './modules/ingestion/application/simple-chunker.service';
-import { EmbeddingPort } from './modules/ingestion/domain/ports/embedding.port';
 import { DefaultFileTextExtractorAdapter } from './modules/ingestion/infrastructure/extractors/default-file-text-extractor.adapter';
 import { OllamaEmbeddingAdapter } from './modules/ingestion/infrastructure/ollama/ollama-embedding.adapter';
 import { OllamaGraphExtractorAdapter } from './modules/ingestion/infrastructure/ollama/ollama-graph-extractor.adapter';
@@ -147,6 +146,7 @@ import { AdminController } from './modules/admin/presentation/admin.controller';
     ChunkScoreFilterService,
     PromptBudgetService,
     PromptTemplateService,
+    VectorIndexInitializerService,
     Neo4jDocumentRepository,
     Neo4jChunkSearchAdapter,
     Neo4jChatHistoryRepository,
@@ -297,17 +297,12 @@ import { AdminController } from './modules/admin/presentation/admin.controller';
 export class AppModule implements OnModuleInit {
   private readonly logger = new Logger(AppModule.name);
 
-  constructor(
-    @Inject(EMBEDDING_PORT)
-    private readonly embeddingPort: EmbeddingPort,
-    @Inject(GRAPH_STORE_PORT)
-    private readonly graphStore: GraphStorePort,
-  ) {}
+  constructor(private readonly vectorIndexInitializer: VectorIndexInitializerService) {}
 
   async onModuleInit(): Promise<void> {
     this.logger.log('Initializing Neo4j vector index for chunk embeddings...');
-    const probeVector = await this.embeddingPort.embed('vector dimension probe');
-    await this.graphStore.ensureVectorIndex(probeVector.length);
-    this.logger.log(`Neo4j vector index ready (${probeVector.length} dimensions).`);
+    // Never blocks nor kills the boot: on gateway outage (e.g. EHOSTUNREACH)
+    // the initializer retries in background and the service starts degraded.
+    await this.vectorIndexInitializer.initialize();
   }
 }
