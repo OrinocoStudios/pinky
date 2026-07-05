@@ -18,6 +18,10 @@ export type AppConfig = {
   corsOrigins: string[];
   objectStorePath: string;
   topK: number;
+  /** Drop retrieved chunks scoring more than this below the best one. 0 disables. */
+  scoreRelativeMargin: number;
+  /** Absolute relevance floor for retrieved chunks. 0 disables. */
+  scoreMin: number;
   chunkSize: number;
   chunkOverlap: number;
   rateLimitTtl: number;
@@ -174,6 +178,8 @@ export default (): BrainConfig => {
         .filter(Boolean),
       objectStorePath: process.env.OBJECT_STORE_PATH ?? './data/objects',
       topK: Number(process.env.TOP_K ?? 8),
+      scoreRelativeMargin: Number(process.env.SCORE_RELATIVE_MARGIN ?? 0.05),
+      scoreMin: Number(process.env.SCORE_MIN ?? 0),
       chunkSize: Number(process.env.CHUNK_SIZE ?? 1200),
       chunkOverlap: Number(process.env.CHUNK_OVERLAP ?? 200),
       rateLimitTtl: Number(process.env.RATE_LIMIT_TTL ?? 60000),

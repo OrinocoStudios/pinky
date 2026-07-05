@@ -1,6 +1,8 @@
 import { Test } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { makeCounterProvider, makeHistogramProvider } from '@willsoto/nestjs-prometheus';
 import { GraphRagQueryUseCase } from './graph-rag-query.usecase';
+import { ChunkScoreFilterService } from './chunk-score-filter.service';
 import { PromptTemplateService } from './prompt-template.service';
 import { StructuredLogger } from '../../../common/logger/structured-logger.service';
 import {
@@ -20,6 +22,7 @@ describe('GraphRagQueryUseCase', () => {
   let answerGenerator: Record<string, jest.Mock>;
   let chatHistory: Record<string, jest.Mock>;
   let queryDocumentAnalytics: Record<string, jest.Mock>;
+  let configValues: Record<string, unknown>;
 
   beforeEach(async () => {
     chunkSearch = {
@@ -73,10 +76,20 @@ describe('GraphRagQueryUseCase', () => {
       getTopDocumentsByQueryCount: jest.fn().mockResolvedValue([]),
     };
 
+    configValues = {
+      'app.scoreRelativeMargin': 0.05,
+      'app.scoreMin': 0,
+    };
+
     const module = await Test.createTestingModule({
       providers: [
         GraphRagQueryUseCase,
+        ChunkScoreFilterService,
         PromptTemplateService,
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn((key: string) => configValues[key]) },
+        },
         {
           provide: StructuredLogger,
           useValue: { debug: jest.fn(), log: jest.fn(), error: jest.fn(), event: jest.fn() },
@@ -200,6 +213,45 @@ describe('GraphRagQueryUseCase', () => {
         libraryId: 'lib-1',
       }),
     );
+  });
+
+  it('should drop low-score chunks from prompt, fastContext and analytics', async () => {
+    chunkSearch.hybridSearch.mockResolvedValue([
+      { chunkId: 'c1', documentId: 'd1', seq: 0, text: 'Ibuprofeno 400 mg venta libre.', createdAt: '', score: 0.91 },
+      { chunkId: 'c2', documentId: 'd2', seq: 0, text: 'Viruela símica brote 2022.', createdAt: '', score: 0.84 },
+    ]);
+    documentRepository.findDocumentById
+      .mockResolvedValueOnce({ documentId: 'd1', title: 'CIMA: Ibuprofeno', metadata: {}, libraryId: 'lib-1' })
+      .mockResolvedValueOnce({ documentId: 'd2', title: 'OMS: Viruela símica', metadata: {}, libraryId: 'lib-1' });
+
+    const result = await useCase.execute({ query: 'ibuprofeno sin receta', topK: 5 });
+
+    expect(result.fastContext.map((c) => c.id)).toEqual(['c1']);
+    const promptArg = answerGenerator.generate.mock.calls[0][0].prompt;
+    expect(promptArg).not.toContain('Viruela símica');
+    const analyticsDocuments = queryDocumentAnalytics.saveRetrievedDocuments.mock.calls[0][0].documents;
+    expect(analyticsDocuments.map((d: any) => d.documentId)).toEqual(['d1']);
+  });
+
+  it('should expose the chunk score in fastContext', async () => {
+    chunkSearch.hybridSearch.mockResolvedValue([
+      { chunkId: 'c1', documentId: 'd1', seq: 0, text: 'A', createdAt: '', score: 0.9 },
+    ]);
+
+    const result = await useCase.execute({ query: 'test', topK: 5 });
+
+    expect(result.fastContext[0].score).toBe(0.9);
+  });
+
+  it('should keep every chunk when scores are within the margin', async () => {
+    chunkSearch.hybridSearch.mockResolvedValue([
+      { chunkId: 'c1', documentId: 'd1', seq: 0, text: 'A', createdAt: '', score: 0.91 },
+      { chunkId: 'c2', documentId: 'd1', seq: 1, text: 'B', createdAt: '', score: 0.9 },
+    ]);
+
+    const result = await useCase.execute({ query: 'test', topK: 5 });
+
+    expect(result.fastContext).toHaveLength(2);
   });
 
   it('should persist deduplicated retrieved documents for analytics', async () => {

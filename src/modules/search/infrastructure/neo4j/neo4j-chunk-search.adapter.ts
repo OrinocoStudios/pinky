@@ -1,6 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { DocumentChunk } from '../../../documents/domain/models/document.model';
-import { ChunkSearchPort, ChunkSearchQuery } from '../../domain/ports/chunk-search.port';
+import { ChunkSearchPort, ChunkSearchQuery, ScoredChunk } from '../../domain/ports/chunk-search.port';
 import { EmbeddingPort } from '../../../ingestion/domain/ports/embedding.port';
 import { Neo4jConnectionService } from '../../../graph/infrastructure/neo4j/neo4j-connection.service';
 import { EMBEDDING_PORT } from '../../../../shared/di.tokens';
@@ -13,7 +12,7 @@ export class Neo4jChunkSearchAdapter implements ChunkSearchPort {
     private readonly embeddingPort: EmbeddingPort,
   ) {}
 
-  async hybridSearch(query: ChunkSearchQuery): Promise<DocumentChunk[]> {
+  async hybridSearch(query: ChunkSearchQuery): Promise<ScoredChunk[]> {
     const queryVector = await this.embeddingPort.embed(query.queryText, 'query');
 
     const session = this.neo4j.getSession();
@@ -56,9 +55,20 @@ export class Neo4jChunkSearchAdapter implements ChunkSearchPort {
         embedding: record.get('embedding') ?? undefined,
         embeddingModel: record.get('embeddingModel') ?? undefined,
         createdAt: record.get('createdAt') ?? new Date().toISOString(),
+        score: this.toScore(record.get('score')),
       }));
     } finally {
       await session.close();
     }
+  }
+
+  private toScore(raw: unknown): number | undefined {
+    if (raw == null) {
+      return undefined;
+    }
+    const value = typeof (raw as { toNumber?: () => number }).toNumber === 'function'
+      ? (raw as { toNumber: () => number }).toNumber()
+      : Number(raw);
+    return Number.isFinite(value) ? value : undefined;
   }
 }

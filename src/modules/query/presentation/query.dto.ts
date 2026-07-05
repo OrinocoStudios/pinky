@@ -31,6 +31,7 @@ export class ChunkSourceDto {
   title?: string;
   libraryId?: string;
   metadata?: Record<string, unknown>;
+  score?: number;
 }
 
 export class GraphFactDto {

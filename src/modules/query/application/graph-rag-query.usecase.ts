@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectMetric } from '@willsoto/nestjs-prometheus';
 import { Counter, Histogram } from 'prom-client';
 import {
@@ -10,10 +11,12 @@ import {
   CHAT_HISTORY_REPOSITORY,
   QUERY_DOCUMENT_ANALYTICS_REPOSITORY,
 } from '../../../shared/di.tokens';
-import { ChunkSearchPort } from '../../search/domain/ports/chunk-search.port';
+import { ChunkSearchPort, ScoredChunk } from '../../search/domain/ports/chunk-search.port';
 import { GraphStorePort } from '../../graph/domain/ports/graph-store.port';
 import { AnswerGeneratorPort } from '../domain/ports/answer-generator.port';
+import { ChunkScoreFilterService } from './chunk-score-filter.service';
 import { PromptTemplateService } from './prompt-template.service';
+import { BrainConfig } from '../../../config/configuration';
 import { StructuredLogger } from '../../../common/logger/structured-logger.service';
 import { DocumentRepositoryPort } from '../../documents/domain/ports/document-repository.port';
 import { ChatHistoryRepositoryPort } from '../domain/ports/chat-history.repository.port';
@@ -39,6 +42,7 @@ export type GraphRagQueryOutput = {
     title?: string;
     libraryId?: string;
     metadata?: Record<string, unknown>;
+    score?: number;
   }>;
   truthFacts: Array<{ id: string; from: string; relation: string; to: string }>;
   model?: string;
@@ -61,6 +65,8 @@ export class GraphRagQueryUseCase {
     @Inject(QUERY_DOCUMENT_ANALYTICS_REPOSITORY)
     private readonly queryDocumentAnalyticsRepository: QueryDocumentAnalyticsRepositoryPort,
     private readonly promptTemplate: PromptTemplateService,
+    private readonly chunkScoreFilter: ChunkScoreFilterService,
+    private readonly configService: ConfigService<BrainConfig>,
     private readonly logger: StructuredLogger,
     @InjectMetric('brain_queries_total')
     private readonly queriesTotalCounter: Counter<string>,
@@ -89,12 +95,13 @@ export class GraphRagQueryUseCase {
 
     try {
       // Step 1: Retrieve chunks from search engine
-      const chunks = await this.chunkSearch.hybridSearch({
+      const retrievedChunks = await this.chunkSearch.hybridSearch({
         tenantId: input.tenantId,
         libraryIds,
         queryText: input.query,
         topK: input.topK,
       });
+      const chunks = this.filterChunksByScore(retrievedChunks);
       const documentIds = [...new Set(chunks.map((chunk: any) => chunk.documentId).filter(Boolean))];
       const documents = await Promise.all(
         documentIds.map(async (documentId: string) => ({
@@ -167,6 +174,7 @@ export class GraphRagQueryUseCase {
         title: documentMap.get(chunk.documentId)?.title,
         libraryId: chunk.libraryId ?? documentMap.get(chunk.documentId)?.libraryId,
         metadata: documentMap.get(chunk.documentId)?.metadata,
+        score: chunk.score,
       }));
 
       const graphFacts = relations.map((rel: any) => ({
@@ -235,6 +243,7 @@ export class GraphRagQueryUseCase {
           title: source.title,
           libraryId: source.libraryId,
           metadata: source.metadata,
+          score: source.score,
         })),
         truthFacts: graphFacts.map((f: any) => ({
           id: f.id,
@@ -260,6 +269,26 @@ export class GraphRagQueryUseCase {
       );
       throw error;
     }
+  }
+
+  private filterChunksByScore(chunks: ScoredChunk[]): ScoredChunk[] {
+    const relativeMargin = this.configService.get('app.scoreRelativeMargin', { infer: true }) ?? 0;
+    const minScore = this.configService.get('app.scoreMin', { infer: true }) ?? 0;
+    const kept = this.chunkScoreFilter.filter(chunks, { relativeMargin, minScore });
+
+    const scores = chunks
+      .map((chunk) => chunk.score)
+      .filter((score): score is number => Number.isFinite(score));
+    this.logger.debug('Chunk score filter applied', GraphRagQueryUseCase.name, {
+      retrieved: chunks.length,
+      kept: kept.length,
+      bestScore: scores.length ? Math.max(...scores) : undefined,
+      worstScore: scores.length ? Math.min(...scores) : undefined,
+      relativeMargin,
+      minScore,
+    });
+
+    return kept;
   }
 
   private extractEntityHintsFromQuery(query: string): string[] {
