@@ -299,10 +299,11 @@ export class AppModule implements OnModuleInit {
 
   constructor(private readonly vectorIndexInitializer: VectorIndexInitializerService) {}
 
-  async onModuleInit(): Promise<void> {
+  onModuleInit(): void {
     this.logger.log('Initializing Neo4j vector index for chunk embeddings...');
-    // Never blocks nor kills the boot: on gateway outage (e.g. EHOSTUNREACH)
-    // the initializer retries in background and the service starts degraded.
-    await this.vectorIndexInitializer.initialize();
+    // Fire-and-forget: a hanging or unreachable gateway must not delay nor
+    // kill the boot; the initializer retries in background and the service
+    // starts degraded until the index is ready.
+    void this.vectorIndexInitializer.initialize();
   }
 }
