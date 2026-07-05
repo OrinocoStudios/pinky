@@ -58,6 +58,10 @@ export type AuthConfig = {
 
 export type LlmConfig = {
   provider: 'local' | 'openai' | 'anthropic' | 'ollama';
+  /** Per-request context window of the serving slot (llama.cpp: ctx-size / parallel). */
+  contextWindow: number;
+  /** Safety margin for the chars->tokens estimation when fitting the prompt. */
+  promptTokenMargin: number;
   openai: {
     baseUrl?: string;
     apiKey: string;
@@ -232,6 +236,8 @@ export default (): BrainConfig => {
     },
     llm: {
       provider: (process.env.LLM_PROVIDER ?? 'local') as 'local' | 'openai' | 'anthropic' | 'ollama',
+      contextWindow: Number(process.env.LLM_CONTEXT_WINDOW ?? 8192),
+      promptTokenMargin: Number(process.env.PROMPT_TOKEN_MARGIN ?? 512),
       openai: {
         baseUrl: process.env.OPENAI_BASE_URL?.trim() || undefined,
         apiKey: process.env.OPENAI_API_KEY ?? '',

@@ -15,6 +15,7 @@ import { ChunkSearchPort, ScoredChunk } from '../../search/domain/ports/chunk-se
 import { GraphStorePort } from '../../graph/domain/ports/graph-store.port';
 import { AnswerGeneratorPort } from '../domain/ports/answer-generator.port';
 import { ChunkScoreFilterService } from './chunk-score-filter.service';
+import { PromptBudgetService } from './prompt-budget.service';
 import { PromptTemplateService } from './prompt-template.service';
 import { BrainConfig } from '../../../config/configuration';
 import { StructuredLogger } from '../../../common/logger/structured-logger.service';
@@ -65,6 +66,7 @@ export class GraphRagQueryUseCase {
     @Inject(QUERY_DOCUMENT_ANALYTICS_REPOSITORY)
     private readonly queryDocumentAnalyticsRepository: QueryDocumentAnalyticsRepositoryPort,
     private readonly promptTemplate: PromptTemplateService,
+    private readonly promptBudget: PromptBudgetService,
     private readonly chunkScoreFilter: ChunkScoreFilterService,
     private readonly configService: ConfigService<BrainConfig>,
     private readonly logger: StructuredLogger,
@@ -185,10 +187,37 @@ export class GraphRagQueryUseCase {
         confidence: rel.confidence,
       }));
 
+      // Fit context to the model slot: best chunks first, then facts.
+      const baseText = this.promptTemplate.buildGroundedPrompt({
+        query: input.query,
+        contextSources: [],
+        graphFacts: [],
+      }).prompt;
+      const budgetTokens = this.promptBudget.computeBudget(
+        this.configService.get('llm.contextWindow', { infer: true }) ?? 8192,
+        this.resolveAnswerMaxTokens(),
+        this.configService.get('llm.promptTokenMargin', { infer: true }) ?? 512,
+      );
+      const fitted = this.promptBudget.fit({
+        chunks: contextSources,
+        facts: graphFacts,
+        baseText,
+        budgetTokens,
+      });
+      if (fitted.chunks.length < contextSources.length || fitted.facts.length < graphFacts.length) {
+        this.logger.debug('Prompt budget applied', GraphRagQueryUseCase.name, {
+          budgetTokens,
+          chunksKept: fitted.chunks.length,
+          chunksDropped: contextSources.length - fitted.chunks.length,
+          factsKept: fitted.facts.length,
+          factsDropped: graphFacts.length - fitted.facts.length,
+        });
+      }
+
       const { prompt, sources } = this.promptTemplate.buildGroundedPrompt({
         query: input.query,
-        contextSources,
-        graphFacts,
+        contextSources: fitted.chunks,
+        graphFacts: fitted.facts,
       });
 
       // Step 4: Generate answer with LLM
@@ -236,7 +265,7 @@ export class GraphRagQueryUseCase {
         prompt,
         answer: result.answer,
         sourcesUsed: result.sourcesUsed,
-        fastContext: contextSources.map((source: any) => ({
+        fastContext: fitted.chunks.map((source: any) => ({
           id: source.id,
           text: source.text,
           documentId: source.documentId,
@@ -245,7 +274,7 @@ export class GraphRagQueryUseCase {
           metadata: source.metadata,
           score: source.score,
         })),
-        truthFacts: graphFacts.map((f: any) => ({
+        truthFacts: fitted.facts.map((f: any) => ({
           id: f.id,
           from: f.fromEntityId,
           relation: f.type,
@@ -269,6 +298,17 @@ export class GraphRagQueryUseCase {
       );
       throw error;
     }
+  }
+
+  private resolveAnswerMaxTokens(): number {
+    const provider = this.configService.get('llm.provider', { infer: true }) ?? 'openai';
+    if (provider === 'anthropic') {
+      return this.configService.get('llm.anthropic.maxTokens', { infer: true }) ?? 4096;
+    }
+    if (provider === 'ollama') {
+      return this.configService.get('ollama.maxTokens', { infer: true }) ?? 1000;
+    }
+    return this.configService.get('llm.openai.maxTokens', { infer: true }) ?? 4096;
   }
 
   private filterChunksByScore(chunks: ScoredChunk[]): ScoredChunk[] {

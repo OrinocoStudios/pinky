@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { makeCounterProvider, makeHistogramProvider } from '@willsoto/nestjs-prometheus';
 import { GraphRagQueryUseCase } from './graph-rag-query.usecase';
 import { ChunkScoreFilterService } from './chunk-score-filter.service';
+import { PromptBudgetService } from './prompt-budget.service';
 import { PromptTemplateService } from './prompt-template.service';
 import { StructuredLogger } from '../../../common/logger/structured-logger.service';
 import {
@@ -79,12 +80,17 @@ describe('GraphRagQueryUseCase', () => {
     configValues = {
       'app.scoreRelativeMargin': 0.05,
       'app.scoreMin': 0,
+      'llm.contextWindow': 8192,
+      'llm.promptTokenMargin': 512,
+      'llm.provider': 'openai',
+      'llm.openai.maxTokens': 1536,
     };
 
     const module = await Test.createTestingModule({
       providers: [
         GraphRagQueryUseCase,
         ChunkScoreFilterService,
+        PromptBudgetService,
         PromptTemplateService,
         {
           provide: ConfigService,
@@ -252,6 +258,32 @@ describe('GraphRagQueryUseCase', () => {
     const result = await useCase.execute({ query: 'test', topK: 5 });
 
     expect(result.fastContext).toHaveLength(2);
+  });
+
+  it('should trim prompt to the token budget: worst chunk and excess facts dropped', async () => {
+    const budgetService = new PromptBudgetService();
+    const templateService = new PromptTemplateService();
+    const query = 'presupuesto test';
+    const keptText = 'K'.repeat(700);
+    const droppedText = 'D'.repeat(700);
+    chunkSearch.hybridSearch.mockResolvedValue([
+      { chunkId: 'c1', documentId: 'd1', seq: 0, text: keptText, createdAt: '', score: 0.9 },
+      { chunkId: 'c2', documentId: 'd1', seq: 1, text: droppedText, createdAt: '', score: 0.88 },
+    ]);
+
+    // Window sized so the budget covers the base prompt + only the best chunk.
+    const baseText = templateService.buildGroundedPrompt({ query, contextSources: [], graphFacts: [] }).prompt;
+    const promptTokens = budgetService.estimateTokens(baseText) + budgetService.chunkCost({ text: keptText });
+    configValues['llm.promptTokenMargin'] = 0;
+    configValues['llm.contextWindow'] = promptTokens + (configValues['llm.openai.maxTokens'] as number);
+
+    const result = await useCase.execute({ query, topK: 5 });
+
+    const promptArg = answerGenerator.generate.mock.calls[0][0].prompt;
+    expect(promptArg).toContain(keptText);
+    expect(promptArg).not.toContain(droppedText);
+    expect(result.fastContext.map((c) => c.id)).toEqual(['c1']);
+    expect(result.truthFacts).toEqual([]);
   });
 
   it('should persist deduplicated retrieved documents for analytics', async () => {

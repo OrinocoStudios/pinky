@@ -48,6 +48,7 @@ import { LocalGraphExtractorAdapter } from './modules/ingestion/infrastructure/l
 import { OpenAiAnswerGeneratorAdapter } from './modules/query/infrastructure/openai/openai-answer-generator.adapter';
 import { AnthropicAnswerGeneratorAdapter } from './modules/query/infrastructure/anthropic/anthropic-answer-generator.adapter';
 import { ChunkScoreFilterService } from './modules/query/application/chunk-score-filter.service';
+import { PromptBudgetService } from './modules/query/application/prompt-budget.service';
 import { PromptTemplateService } from './modules/query/application/prompt-template.service';
 import { QueryController } from './modules/query/presentation/query.controller';
 import { IndexController } from './modules/index/presentation/index.controller';
@@ -144,6 +145,7 @@ import { AdminController } from './modules/admin/presentation/admin.controller';
     SummarizeUseCase,
     SimpleChunkerService,
     ChunkScoreFilterService,
+    PromptBudgetService,
     PromptTemplateService,
     Neo4jDocumentRepository,
     Neo4jChunkSearchAdapter,
