@@ -10,7 +10,8 @@ export type ChatMessage = {
 
 export interface ChatHistoryRepositoryPort {
   saveMessage(message: Omit<ChatMessage, 'createdAt'>): Promise<ChatMessage>;
-  getBySessionId(sessionId: string): Promise<ChatMessage[]>;
+  /** tenantId scopes the read; omit it only for unrestricted callers. */
+  getBySessionId(sessionId: string, tenantId?: string): Promise<ChatMessage[]>;
   countQueries(tenantId?: string, libraryId?: string): Promise<number>;
   getQueryCountByDay(
     days: number,

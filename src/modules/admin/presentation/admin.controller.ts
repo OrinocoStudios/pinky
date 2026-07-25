@@ -2,6 +2,9 @@ import { Controller, Get, Headers, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SkipThrottle } from '@nestjs/throttler';
 import { RequireApiKey } from '../../../common/decorators/require-api-key.decorator';
+import { CurrentPrincipal } from '../../../common/decorators/current-principal.decorator';
+import { ApiPrincipal } from '../../../common/security/api-principal';
+import { RequestScope, resolveRequestScope } from '../../../common/security/request-scope';
 import { BrainConfig } from '../../../config/configuration';
 import { DocumentRepositoryPort } from '../../documents/domain/ports/document-repository.port';
 import { DocumentRecord } from '../../documents/domain/models/document.model';
@@ -39,9 +42,9 @@ export class AdminController {
   async overview(
     @Headers('x-tenant-id') tenantHeader?: string,
     @Headers('x-library-id') libraryHeader?: string,
+    @CurrentPrincipal() principal?: ApiPrincipal,
   ) {
-    const tenantId = this.resolveTenantId(tenantHeader);
-    const libraryId = this.resolveLibraryId(libraryHeader);
+    const { tenantId, libraryId } = this.resolveScope(principal, tenantHeader, libraryHeader);
     const startedAt = Date.now();
 
     let neo4j: { status: 'up' | 'down'; latency_ms?: number } = { status: 'down' };
@@ -169,17 +172,17 @@ export class AdminController {
     return hydratedEntries;
   }
 
-  private resolveTenantId(rawTenantId?: string): string | undefined {
-    const enableMultiTenant = this.configService.get('app.enableMultiTenant', { infer: true }) ?? false;
-    const tenantId = rawTenantId?.trim();
-    if (enableMultiTenant && !tenantId) {
-      throw new Error('X-Tenant-Id header is required when ENABLE_MULTI_TENANT=true');
-    }
-    return tenantId;
+  private resolveScope(
+    principal: ApiPrincipal | undefined,
+    tenantHeader?: string,
+    libraryHeader?: string,
+  ): RequestScope {
+    return resolveRequestScope({
+      principal,
+      tenantHeader,
+      libraryHeader,
+      enableMultiTenant: this.configService.get('app.enableMultiTenant', { infer: true }) ?? false,
+    });
   }
 
-  private resolveLibraryId(rawLibraryId?: string): string | undefined {
-    const libraryId = rawLibraryId?.trim();
-    return libraryId && libraryId.length > 0 ? libraryId : undefined;
-  }
 }

@@ -24,6 +24,9 @@ import { DOCUMENT_REPOSITORY, FILE_TEXT_EXTRACTOR_PORT } from '../../../shared/d
 import { GenerateDocumentDto, IngestTextDocumentDto, UploadDocumentDto } from './documents.dto';
 import { FileTextExtractorPort } from '../../ingestion/domain/ports/file-text-extractor.port';
 import { RequireApiKey } from '../../../common/decorators/require-api-key.decorator';
+import { CurrentPrincipal } from '../../../common/decorators/current-principal.decorator';
+import { ApiPrincipal } from '../../../common/security/api-principal';
+import { RequestScope, resolveRequestScope } from '../../../common/security/request-scope';
 import { FileUploadInterceptor } from '../../../common/interceptors/file-upload.interceptor';
 import { BrainConfig } from '../../../config/configuration';
 import { StructuredLogger } from '../../../common/logger/structured-logger.service';
@@ -50,9 +53,9 @@ export class DocumentsController {
     @Body() body: IngestTextDocumentDto,
     @Headers('x-tenant-id') tenantHeader?: string,
     @Headers('x-library-id') libraryHeader?: string,
+    @CurrentPrincipal() principal?: ApiPrincipal,
   ) {
-    const tenantId = this.resolveTenantId(tenantHeader);
-    const libraryId = this.resolveLibraryId(libraryHeader);
+    const { tenantId, libraryId } = this.resolveScope(principal, tenantHeader, libraryHeader);
     return this.ingestDocumentUseCase.execute({
       tenantId,
       libraryId,
@@ -71,12 +74,12 @@ export class DocumentsController {
     @Body() body: GenerateDocumentDto,
     @Headers('x-tenant-id') tenantHeader?: string,
     @Headers('x-library-id') libraryHeader?: string,
+    @CurrentPrincipal() principal?: ApiPrincipal,
   ) {
     if (!body.useCaseId?.trim()) {
       throw new BadRequestException('useCaseId is required');
     }
-    const tenantId = this.resolveTenantId(tenantHeader);
-    const libraryId = this.resolveLibraryId(libraryHeader);
+    const { tenantId, libraryId } = this.resolveScope(principal, tenantHeader, libraryHeader);
     return this.generateDocumentUseCase.execute({
       tenantId,
       libraryId,
@@ -96,6 +99,7 @@ export class DocumentsController {
     @Body() body: UploadDocumentDto,
     @Headers('x-tenant-id') tenantHeader?: string,
     @Headers('x-library-id') libraryHeader?: string,
+    @CurrentPrincipal() principal?: ApiPrincipal,
   ) {
     if (!file) {
       throw new BadRequestException('file is required');
@@ -106,8 +110,7 @@ export class DocumentsController {
       throw new BadRequestException('Unable to extract text from uploaded file');
     }
 
-    const tenantId = this.resolveTenantId(tenantHeader);
-    const libraryId = this.resolveLibraryId(libraryHeader);
+    const { tenantId, libraryId } = this.resolveScope(principal, tenantHeader, libraryHeader);
     return this.ingestDocumentUseCase.execute({
       tenantId,
       libraryId,
@@ -132,14 +135,14 @@ export class DocumentsController {
   async listDocuments(
     @Headers('x-tenant-id') tenantHeader?: string,
     @Headers('x-library-id') libraryHeader?: string,
+    @CurrentPrincipal() principal?: ApiPrincipal,
     @Query('page') pageQuery?: string,
     @Query('pageSize') pageSizeQuery?: string,
   ) {
     const page = this.parsePositiveInteger(pageQuery, 1);
     const pageSize = this.parsePositiveInteger(pageSizeQuery, 24, 200);
     const offset = (page - 1) * pageSize;
-    const tenantId = this.resolveTenantId(tenantHeader);
-    const libraryId = this.resolveLibraryId(libraryHeader);
+    const { tenantId, libraryId } = this.resolveScope(principal, tenantHeader, libraryHeader);
     const total = await this.documentRepository.countDocuments(tenantId, libraryId);
 
     let documents: DocumentRecord[] = [];
@@ -176,9 +179,9 @@ export class DocumentsController {
     @Param('id') documentId: string,
     @Headers('x-tenant-id') tenantHeader?: string,
     @Headers('x-library-id') libraryHeader?: string,
+    @CurrentPrincipal() principal?: ApiPrincipal,
   ) {
-    const tenantId = this.resolveTenantId(tenantHeader);
-    const libraryId = this.resolveLibraryId(libraryHeader);
+    const { tenantId, libraryId } = this.resolveScope(principal, tenantHeader, libraryHeader);
     const document = await this.documentRepository.findDocumentById(documentId);
     if (!document) {
       throw new NotFoundException(`Document ${documentId} not found`);
@@ -199,27 +202,26 @@ export class DocumentsController {
     @Param('id') documentId: string,
     @Headers('x-tenant-id') tenantHeader?: string,
     @Headers('x-library-id') libraryHeader?: string,
+    @CurrentPrincipal() principal?: ApiPrincipal,
   ) {
-    const tenantId = this.resolveTenantId(tenantHeader);
-    const libraryId = this.resolveLibraryId(libraryHeader);
+    const { tenantId, libraryId } = this.resolveScope(principal, tenantHeader, libraryHeader);
     await this.deleteDocumentUseCase.execute(documentId, tenantId, libraryId);
     return { deleted: documentId };
   }
 
-  private resolveTenantId(rawTenantId?: string): string | undefined {
-    const enableMultiTenant = this.configService.get('app.enableMultiTenant', { infer: true }) ?? false;
-    const tenantId = rawTenantId?.trim();
-    const normalizedTenantId = tenantId && tenantId.length > 0 ? tenantId : undefined;
-    if (enableMultiTenant && !tenantId) {
-      throw new BadRequestException('X-Tenant-Id header is required when ENABLE_MULTI_TENANT=true');
-    }
-    return normalizedTenantId;
+  private resolveScope(
+    principal: ApiPrincipal | undefined,
+    tenantHeader?: string,
+    libraryHeader?: string,
+  ): RequestScope {
+    return resolveRequestScope({
+      principal,
+      tenantHeader,
+      libraryHeader,
+      enableMultiTenant: this.configService.get('app.enableMultiTenant', { infer: true }) ?? false,
+    });
   }
 
-  private resolveLibraryId(rawLibraryId?: string): string | undefined {
-    const libraryId = rawLibraryId?.trim();
-    return libraryId && libraryId.length > 0 ? libraryId : undefined;
-  }
 
   private toDocumentSummary(document: DocumentRecord): Omit<DocumentRecord, 'rawText'> & { previewText?: string } {
     const { rawText, ...summary } = document;

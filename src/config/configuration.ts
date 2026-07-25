@@ -1,9 +1,14 @@
+import { ApiKeyEntry, parseApiKeys } from '../common/security/api-principal';
+
 export type AppConfig = {
   env: string;
   port: number;
   /** Optional instance ID for outbox claim (e.g. Kubernetes pod name) */
   instanceId?: string;
+  /** Legacy single credential. Unrestricted: may act on any tenant/library. */
   apiKey: string;
+  /** Scoped credentials from API_KEYS, each pinned to a tenant and/or libraries. */
+  apiKeys: ApiKeyEntry[];
   enableApiKeyAuth: boolean;
   enableMultiTenant: boolean;
   /**
@@ -123,8 +128,14 @@ export function validateProductionConfig(config: BrainConfig): void {
 
   const problems: string[] = [];
 
-  if (config.app.enableApiKeyAuth && INSECURE_DEFAULTS.apiKey.has(config.app.apiKey)) {
-    problems.push('API_KEY must be set to a strong value (ENABLE_API_KEY_AUTH=true).');
+  // API_KEYS alone is a valid (and preferred) setup: scoped credentials make the
+  // unrestricted legacy key unnecessary.
+  if (
+    config.app.enableApiKeyAuth &&
+    config.app.apiKeys.length === 0 &&
+    INSECURE_DEFAULTS.apiKey.has(config.app.apiKey)
+  ) {
+    problems.push('Set API_KEY to a strong value or configure API_KEYS (ENABLE_API_KEY_AUTH=true).');
   }
 
   if (INSECURE_DEFAULTS.jwtSecret.has(config.auth.jwtSecret)) {
@@ -173,6 +184,7 @@ export default (): BrainConfig => {
       port: Number(process.env.PORT ?? 8081),
       instanceId: process.env.APP_INSTANCE_ID,
       apiKey: process.env.API_KEY ?? '',
+      apiKeys: parseApiKeys(process.env.API_KEYS),
       enableApiKeyAuth: process.env.ENABLE_API_KEY_AUTH === 'true',
       enableMultiTenant: process.env.ENABLE_MULTI_TENANT === 'true',
       corsEnabled: process.env.CORS_ENABLED === 'true',

@@ -59,16 +59,17 @@ export class Neo4jChatHistoryRepository implements ChatHistoryRepositoryPort, On
     }
   }
 
-  async getBySessionId(sessionId: string): Promise<ChatMessage[]> {
+  async getBySessionId(sessionId: string, tenantId?: string): Promise<ChatMessage[]> {
     const session = this.neo4j.getSession();
     try {
       const result = await session.run(
         `
         MATCH (m:ChatMessage {sessionId: $sessionId})
+        WHERE $tenantId IS NULL OR m.tenantId = $tenantId
         RETURN m
         ORDER BY m.createdAt ASC
         `,
-        { sessionId },
+        { sessionId, tenantId: tenantId ?? null },
       );
 
       return result.records.map((record) => {

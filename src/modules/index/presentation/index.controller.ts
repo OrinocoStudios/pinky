@@ -4,6 +4,9 @@ import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { ReindexChunksUseCase } from '../../ingestion/application/reindex-chunks.usecase';
 import { ReindexDto } from './index.dto';
 import { RequireApiKey } from '../../../common/decorators/require-api-key.decorator';
+import { CurrentPrincipal } from '../../../common/decorators/current-principal.decorator';
+import { ApiPrincipal } from '../../../common/security/api-principal';
+import { RequestScope, resolveRequestScope } from '../../../common/security/request-scope';
 import { BrainConfig } from '../../../config/configuration';
 
 @Controller('index')
@@ -21,9 +24,9 @@ export class IndexController {
     @Body() body: ReindexDto,
     @Headers('x-tenant-id') tenantHeader?: string,
     @Headers('x-library-id') libraryHeader?: string,
+    @CurrentPrincipal() principal?: ApiPrincipal,
   ) {
-    const tenantId = this.resolveTenantId(tenantHeader);
-    const libraryId = this.resolveLibraryId(libraryHeader);
+    const { tenantId, libraryId } = this.resolveScope(principal, tenantHeader, libraryHeader);
     const result = await this.reindexChunksUseCase.execute({
       limit: body.limit,
       mode: 'rebuild',
@@ -41,9 +44,9 @@ export class IndexController {
     @Body() body: ReindexDto,
     @Headers('x-tenant-id') tenantHeader?: string,
     @Headers('x-library-id') libraryHeader?: string,
+    @CurrentPrincipal() principal?: ApiPrincipal,
   ) {
-    const tenantId = this.resolveTenantId(tenantHeader);
-    const libraryId = this.resolveLibraryId(libraryHeader);
+    const { tenantId, libraryId } = this.resolveScope(principal, tenantHeader, libraryHeader);
     const result = await this.reindexChunksUseCase.execute({
       limit: body.limit,
       mode: 'incremental',
@@ -53,17 +56,17 @@ export class IndexController {
     return result;
   }
 
-  private resolveTenantId(rawTenantId?: string): string | undefined {
-    const enableMultiTenant = this.configService.get('app.enableMultiTenant', { infer: true }) ?? false;
-    const tenantId = rawTenantId?.trim();
-    if (enableMultiTenant && !tenantId) {
-      throw new BadRequestException('X-Tenant-Id header is required when ENABLE_MULTI_TENANT=true');
-    }
-    return tenantId;
+  private resolveScope(
+    principal: ApiPrincipal | undefined,
+    tenantHeader?: string,
+    libraryHeader?: string,
+  ): RequestScope {
+    return resolveRequestScope({
+      principal,
+      tenantHeader,
+      libraryHeader,
+      enableMultiTenant: this.configService.get('app.enableMultiTenant', { infer: true }) ?? false,
+    });
   }
 
-  private resolveLibraryId(rawLibraryId?: string): string | undefined {
-    const libraryId = rawLibraryId?.trim();
-    return libraryId && libraryId.length > 0 ? libraryId : undefined;
-  }
 }
