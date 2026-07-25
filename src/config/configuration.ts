@@ -76,6 +76,11 @@ export type LlmConfig = {
     temperature: number;
     maxTokens: number;
     timeoutMs: number;
+    /**
+     * Headers added to every call. Needed when the gateway sits behind an
+     * authenticating proxy (e.g. Cloudflare Access service tokens).
+     */
+    extraHeaders: Record<string, string>;
   };
   anthropic: {
     apiKey: string;
@@ -156,6 +161,37 @@ export function validateProductionConfig(config: BrainConfig): void {
     );
   }
 }
+/**
+ * OPENAI_EXTRA_HEADERS is a flat JSON object of header name -> value.
+ * Throws on malformed input: silently dropping an auth header would surface as
+ * an opaque 403 from the gateway.
+ */
+function parseExtraHeaders(raw: string | undefined): Record<string, string> {
+  const trimmed = raw?.trim();
+  if (!trimmed) {
+    return {};
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (error) {
+    throw new Error(`OPENAI_EXTRA_HEADERS must be a JSON object: ${(error as Error).message}`);
+  }
+
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('OPENAI_EXTRA_HEADERS must be a JSON object');
+  }
+
+  const entries = Object.entries(parsed as Record<string, unknown>);
+  const invalid = entries.filter(([, value]) => typeof value !== 'string');
+  if (invalid.length > 0) {
+    throw new Error(`OPENAI_EXTRA_HEADERS values must be strings (offending: ${invalid.map(([k]) => k).join(', ')})`);
+  }
+
+  return Object.fromEntries(entries as Array<[string, string]>);
+}
+
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   if (value == null) {
     return fallback;
@@ -259,6 +295,7 @@ export default (): BrainConfig => {
         temperature: Number(process.env.OPENAI_TEMPERATURE ?? 0.2),
         maxTokens: Number(process.env.OPENAI_MAX_TOKENS ?? 4096),
         timeoutMs: Number(process.env.OPENAI_TIMEOUT_MS ?? 120000),
+        extraHeaders: parseExtraHeaders(process.env.OPENAI_EXTRA_HEADERS),
       },
       anthropic: {
         apiKey: process.env.ANTHROPIC_API_KEY ?? '',

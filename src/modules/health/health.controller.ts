@@ -68,7 +68,7 @@ export class HealthController {
       if (!baseUrl) {
         return { status: 'configured', provider };
       }
-      return this.pingOpenAiCompatible(baseUrl, openai?.apiKey, provider);
+      return this.pingOpenAiCompatible(baseUrl, openai?.apiKey, provider, openai?.extraHeaders);
     }
 
     if (provider === 'ollama') {
@@ -86,8 +86,11 @@ export class HealthController {
     baseUrl: string,
     apiKey: string | undefined,
     provider: string,
+    // Without these the probe fails with 403 behind an authenticating proxy
+    // while the adapters, which do send them, work fine.
+    extraHeaders: Record<string, string> = {},
   ): Promise<ServiceStatus> {
-    const headers: Record<string, string> = { accept: 'application/json' };
+    const headers: Record<string, string> = { accept: 'application/json', ...extraHeaders };
     if (apiKey) {
       headers['authorization'] = `Bearer ${apiKey}`;
     }
